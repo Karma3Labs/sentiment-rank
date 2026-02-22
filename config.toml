@@ -1,0 +1,66 @@
+# Search settings
+[search]
+query_type = "Top"  # "Latest" or "Top"
+max_pages = 5  # Maximum pages to fetch per query
+seed_peers_count = 100  # Number of tweets to process for seed peers
+
+[look_back]
+year = 2026
+month = 1
+
+parallel_requests = 100
+max_tweets = 100
+
+[seed_peers]
+crypto = [
+    "@intocryptoverse",
+    "@whale_alert",
+    "@NickSzabo4",
+    "@ki_young_ju",
+    "@glassnode",
+    "@APompliano",
+    "@danheld",
+    "@TuurDemeester",
+    "@100trillionUSD",
+    "@nansen_ai",
+    "@jack",
+    "@santimentfeed",
+    "@lookonchain",
+    "@arkham",
+    "@rektcapital",
+    "@scottmelker",
+    "@CryptoCred",
+    "@paradigm",
+    "@MessariCrypto",
+    "@RaoulGMI",
+    "@spencernoon",
+    "@TheBlock__",
+    "@laurashin",
+    "@WatcherGuru",
+    "@ToneVays",
+    "@balajis",
+    "@NoelleInMadrid",
+    "@cdixon",
+    "@0xfoobar",
+    "@adamscochran",
+    "@sassal0x",
+    "@LynAldenContact",
+    "@timbeiko",
+    "@tokenterminal",
+    "@StaniKulechov",
+    "@chainalysis",
+    "@VitalikButerin",
+    "@CryptoHayes",
+    "@RyanSAdams",
+    "@TrustlessState"
+]
+
+# Topic definitions
+# Each topic has a name and a query using Twitter advanced search syntax
+# Reference: https://github.com/igorbrigadir/twitter-advanced-search
+
+[[topics]]
+name = "btc_price_prediction"
+description = "BTC above 70k in the next 6 months or less" # Yes or no
+query = "(bitcoin OR BTC OR $BTC) (price OR prediction OR forecast OR target) (week OR month OR months OR days) lang:en -filter:retweets"
+hashtags = ["#BTC", "#Bitcoin", "#BTCPricePrediction", "#CryptoForecast", "#BitcoinPrice"]
