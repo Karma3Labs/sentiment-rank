@@ -7,6 +7,19 @@ from typing import Iterator
 
 
 API_BASE_URL = "https://api.twitterapi.io/twitter/tweet/advanced_search"
+API_REPLIES_URL = "https://api.twitterapi.io/twitter/tweet/replies/v2"
+API_QUOTES_URL = "https://api.twitterapi.io/twitter/tweet/quotes"
+API_RETWEETERS_URL = "https://api.twitterapi.io/twitter/tweet/retweeters"
+
+
+def normalize_author(author: dict) -> dict:
+    return {
+        "id": author.get("id"),
+        "userName": author.get("userName"),
+        "name": author.get("name"),
+        "followers": author.get("followers"),
+        "isBlueVerified": author.get("isBlueVerified"),
+    }
 
 
 def normalize_tweet(tweet: dict) -> dict:
@@ -28,14 +41,72 @@ def normalize_tweet(tweet: dict) -> dict:
         "replyCount": tweet.get("replyCount"),
         "quoteCount": tweet.get("quoteCount"),
         "mediaUrls": media_urls,
-        "author": {
-            "id": author.get("id"),
-            "userName": author.get("userName"),
-            "name": author.get("name"),
-            "followers": author.get("followers"),
-            "isBlueVerified": author.get("isBlueVerified"),
-        },
+        "author": normalize_author(author),
     }
+
+
+def get_tweet_replies(tweet_id: str, api_key: str) -> list[dict]:
+    headers = {"X-API-Key": api_key}
+    params = {"tweetId": tweet_id}
+    replies = []
+    cursor = ""
+    while True:
+        if cursor:
+            params["cursor"] = cursor
+        response = requests.get(API_REPLIES_URL, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        for tweet in data.get("tweets", []):
+            if tweet.get("id") != tweet_id and tweet.get("isReply"):
+                replies.append(normalize_tweet(tweet))
+        if not data.get("has_next_page"):
+            break
+        cursor = data.get("next_cursor", "")
+        if not cursor:
+            break
+    return replies
+
+
+def get_tweet_quotes(tweet_id: str, api_key: str) -> list[dict]:
+    headers = {"X-API-Key": api_key}
+    params = {"tweetId": tweet_id}
+    quotes = []
+    cursor = ""
+    while True:
+        if cursor:
+            params["cursor"] = cursor
+        response = requests.get(API_QUOTES_URL, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        for quote in data.get("tweets", []):
+            quotes.append(normalize_tweet(quote))
+        if not data.get("has_next_page"):
+            break
+        cursor = data.get("next_cursor", "")
+        if not cursor:
+            break
+    return quotes
+
+
+def get_tweet_retweeters(tweet_id: str, api_key: str) -> list[dict]:
+    headers = {"X-API-Key": api_key}
+    params = {"tweetId": tweet_id}
+    retweeters = []
+    cursor = ""
+    while True:
+        if cursor:
+            params["cursor"] = cursor
+        response = requests.get(API_RETWEETERS_URL, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        for user in data.get("users", []):
+            retweeters.append(normalize_author(user))
+        if not data.get("has_next_page"):
+            break
+        cursor = data.get("next_cursor", "")
+        if not cursor:
+            break
+    return retweeters
 
 
 def load_config(config_path: str = "config.toml") -> dict:
@@ -67,18 +138,32 @@ def search_all_tweets(
     api_key: str,
     query_type: str = "Latest",
     max_pages: int | None = None,
+    max_tweets: int | None = None,
 ) -> Iterator[dict]:
     cursor = ""
     page_count = 0
+    tweet_count = 0
 
     while True:
+        page_count += 1
+        print(f"Fetching page {page_count}...")
         result = search_tweets(query, api_key, query_type, cursor)
         tweets = result.get("tweets", [])
+        print(f"  Got {len(tweets)} tweets")
 
         for tweet in tweets:
-            yield normalize_tweet(tweet)
+            normalized = normalize_tweet(tweet)
+            tweet_id = normalized["id"]
+            tweet_count += 1
+            print(f"  [{tweet_count}/{max_tweets or '?'}] Processing tweet {tweet_id}...")
+            normalized["replies"] = get_tweet_replies(tweet_id, api_key)
+            normalized["quotes"] = get_tweet_quotes(tweet_id, api_key)
+            normalized["retweeters"] = get_tweet_retweeters(tweet_id, api_key)
+            print(f"    replies={len(normalized['replies'])} quotes={len(normalized['quotes'])} retweeters={len(normalized['retweeters'])}")
+            yield normalized
+            if max_tweets and tweet_count >= max_tweets:
+                return
 
-        page_count += 1
         if max_pages and page_count >= max_pages:
             break
 
@@ -114,11 +199,12 @@ def search_topic(
 
     query = topic["query"]
     query_type = config.get("search", {}).get("query_type", "Latest")
+    max_tweets = config.get("max_tweets")
 
     if max_pages is None:
         max_pages = config.get("search", {}).get("max_pages")
 
-    tweets = list(search_all_tweets(query, api_key, query_type, max_pages))
+    tweets = list(search_all_tweets(query, api_key, query_type, max_pages, max_tweets))
     return tweets
 
 
@@ -153,8 +239,7 @@ def main():
 
     raw_dir = Path("raw")
     raw_dir.mkdir(exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = raw_dir / f"{args.topic}_{timestamp}.json"
+    output_path = raw_dir / f"{args.topic}.json"
 
     with open(output_path, "w") as f:
         json.dump(tweets, f, indent=2)

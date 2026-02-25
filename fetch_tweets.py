@@ -227,24 +227,13 @@ def main():
     month = look_back.get("month", 1)
     cutoff_date = datetime(year, month, 1)
 
-    parallel_requests = config.get("parallel_requests", 100)
-    max_tweets = config.get("max_tweets", 100)
+    parallel_requests = look_back.get("parallel_requests", 100)
+    max_tweets = look_back.get("max_tweets", 100)
 
     seed_peers = config.get("seed_peers", {}).get(category, [])
-    seed_usernames = {p.lstrip("@") for p in seed_peers}
+    seed_usernames = [p.lstrip("@") for p in seed_peers]
 
-    followings_path = Path(__file__).parent / "raw" / f"{category}_followings.json"
-    if followings_path.exists():
-        with open(followings_path, "r") as f:
-            followings_data = json.load(f)
-        following_usernames = set()
-        for usernames in followings_data.values():
-            following_usernames.update(usernames)
-    else:
-        following_usernames = set()
-
-    all_users = seed_usernames | following_usernames
-    all_users = [u for u in all_users if u]
+    all_users = [u for u in seed_usernames if u]
     total = len(all_users)
     start_time = datetime.now()
     print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")

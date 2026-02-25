@@ -55,12 +55,44 @@ crypto = [
     "@TrustlessState"
 ]
 
+politics = [
+    "@NateSilver538",
+    "@EWErickson",
+    "@BillKristol",
+    "@NathanJRobinson",
+    "@mattyglesias",
+    "@KyleKulinski",
+    "@TuckerCarlson",
+    "@AnaKasparian",
+    "@SteveSchmidtSES",
+    "@benshapiro"
+]
+
 # Topic definitions
 # Each topic has a name and a query using Twitter advanced search syntax
 # Reference: https://github.com/igorbrigadir/twitter-advanced-search
 
 [[topics]]
 name = "btc_price_prediction"
-description = "BTC above 70k in the next 6 months or less" # Yes or no
+description = "BTC below 60k in the next 6 months or less"
+outcome = ["yes", "no"]
 query = "(bitcoin OR BTC OR $BTC) (price OR prediction OR forecast OR target) (week OR month OR months OR days) lang:en -filter:retweets"
 hashtags = ["#BTC", "#Bitcoin", "#BTCPricePrediction", "#CryptoForecast", "#BitcoinPrice"]
+category = "crypto"
+
+[[topics]]
+name = "btc_price_february"
+description = "BTC price in February"
+outcome = ["above 70k", "60k-70k", "50k-60k", "below 50k"]
+query = "(bitcoin OR BTC OR $BTC) (february OR feb OR end of month) (price OR prediction OR forecast OR target OR expect OR outlook OR analysis OR estimate OR projection OR range OR level OR support OR resistance OR bottom OR top OR high OR low OR bull OR bear OR rally OR dump OR crash OR pump OR moon OR dip OR correction OR recovery) lang:en -filter:retweets"
+hashtags = ["#BTC", "#Bitcoin", "#BTCPrice", "#CryptoForecast", "#BitcoinPrice", "#BTCPrediction", "#CryptoAnalysis"]
+category = "crypto"
+
+[trust_weights]
+# Trust weights for different interaction types
+follow = 30
+mention = 30
+reply = 20
+retweet = 50
+quote = 40
+post = 100
