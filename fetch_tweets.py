@@ -1,4 +1,5 @@
 import os
+import sys
 import tomllib
 import requests
 import json
@@ -215,12 +216,18 @@ def save_checkpoint(checkpoint_path: Path, results: dict, processed: set):
 
 
 def main():
+    if len(sys.argv) < 2:
+        print("Usage: python fetch_tweets.py <category>")
+        print("Example: python fetch_tweets.py crypto")
+        sys.exit(1)
+
+    category = sys.argv[1]
+
     api_key = os.environ.get("TWITTER_API_KEY")
     if not api_key:
         raise ValueError("TWITTER_API_KEY environment variable not set")
 
     config = load_config()
-    category = os.environ.get("CATEGORY", "crypto")
 
     look_back = config.get("look_back", {})
     year = look_back.get("year", 2026)
@@ -270,17 +277,15 @@ def main():
 
         elapsed = datetime.now() - start_time
 
-        if batches_in_current_file >= BATCHES_PER_FILE or batch_num == total_batches:
-            checkpoint_path = get_checkpoint_path(raw_dir, category, current_file_index)
-            print(f"Saving data file {checkpoint_path}... (elapsed: {elapsed})")
-            save_checkpoint(checkpoint_path, current_file_results, current_file_processed)
+        checkpoint_path = get_checkpoint_path(raw_dir, category, current_file_index)
+        print(f"Saving data file {checkpoint_path}... (elapsed: {elapsed})")
+        save_checkpoint(checkpoint_path, current_file_results, current_file_processed)
 
+        if batches_in_current_file >= BATCHES_PER_FILE:
             current_file_index += 1
             current_file_results = {}
             current_file_processed = set()
             batches_in_current_file = 0
-        else:
-            print(f"Batch {batch_num} done (elapsed: {elapsed})")
 
     print(f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Total elapsed: {datetime.now() - start_time}")

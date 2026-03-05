@@ -13,13 +13,17 @@ def load_config():
 
 
 def load_checkpoints(raw_dir: Path, category: str) -> dict:
-    pattern = str(raw_dir / f"{category}_tweets_checkpoint_*.json")
-    files = sorted(glob.glob(pattern))
+    patterns = [
+        str(raw_dir / f"{category}_tweets_checkpoint_*.json"),
+        str(raw_dir / f"{category}_extended_tweets_checkpoint_*.json"),
+    ]
     all_results = {}
-    for filepath in files:
-        with open(filepath, "r") as f:
-            data = json.load(f)
-        all_results.update(data.get("results", {}))
+    for pattern in patterns:
+        files = sorted(glob.glob(pattern))
+        for filepath in files:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+            all_results.update(data.get("results", {}))
     return all_results
 
 

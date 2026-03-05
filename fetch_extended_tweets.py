@@ -1,8 +1,10 @@
 import os
+import sys
 import tomllib
 import requests
 import json
 import time
+import http.client
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -228,6 +230,111 @@ def load_seed_tweets(raw_dir: Path, category: str) -> dict:
     return all_results
 
 
+def get_user_followings(username: str, rapid_api_key: str) -> list[str]:
+    all_ids = []
+    cursor = None
+
+    while True:
+        conn = http.client.HTTPSConnection("twitter241.p.rapidapi.com")
+        headers = {
+            'x-rapidapi-key': rapid_api_key,
+            'x-rapidapi-host': "twitter241.p.rapidapi.com"
+        }
+        url = f"/following-ids?username={username}&count=1000"
+        if cursor:
+            url += f"&cursor={cursor}"
+        conn.request("GET", url, headers=headers)
+        res = conn.getresponse()
+        data = res.read()
+        result = json.loads(data.decode("utf-8"))
+
+        ids = result.get("ids", [])
+        all_ids.extend(ids)
+
+        cursor = result.get("next_cursor")
+        if not cursor or cursor == "0" or cursor == 0:
+            break
+        time.sleep(0.2)
+
+    return all_ids
+
+
+def convert_ids_to_usernames(ids: list[str], rapid_api_key: str) -> list[str]:
+    usernames = []
+    batch_size = 100
+    total_batches = (len(ids) + batch_size - 1) // batch_size
+
+    for i in range(0, len(ids), batch_size):
+        batch_num = i // batch_size + 1
+        batch = ids[i:i + batch_size]
+        print(f"[{batch_num}/{total_batches}] Converting IDs {i+1}-{min(i+batch_size, len(ids))}...")
+        ids_param = "%2C".join(str(id) for id in batch)
+
+        conn = http.client.HTTPSConnection("twitter241.p.rapidapi.com")
+        headers = {
+            'x-rapidapi-key': rapid_api_key,
+            'x-rapidapi-host': "twitter241.p.rapidapi.com"
+        }
+        conn.request("GET", f"/get-users-v2?users={ids_param}", headers=headers)
+        res = conn.getresponse()
+        data = res.read()
+        result = json.loads(data.decode("utf-8"))
+
+        users = result.get("result", [])
+        for user in users:
+            legacy = user.get("legacy", {})
+            screen_name = legacy.get("screen_name")
+            if screen_name:
+                usernames.append(screen_name)
+
+        time.sleep(0.2)
+
+    return usernames
+
+
+def load_followings(raw_dir: Path, category: str) -> set | None:
+    filepath = raw_dir / f"{category}_followings.json"
+    if filepath.exists():
+        with open(filepath, "r") as f:
+            data = json.load(f)
+        return set(data.get("usernames", []))
+    return None
+
+
+def save_followings(raw_dir: Path, category: str, usernames: set):
+    filepath = raw_dir / f"{category}_followings.json"
+    with open(filepath, "w") as f:
+        json.dump({"usernames": list(usernames)}, f)
+
+
+def fetch_followings_for_seeds(seed_usernames: set, rapid_api_key: str, raw_dir: Path, category: str) -> set:
+    # Try to load from cache
+    cached = load_followings(raw_dir, category)
+    if cached is not None:
+        print(f"Loaded {len(cached)} followings from cache")
+        return cached
+
+    all_ids = []
+    for i, username in enumerate(seed_usernames, 1):
+        try:
+            followings = get_user_followings(username, rapid_api_key)
+            print(f"[{i}/{len(seed_usernames)}] {username}: {len(followings)} followings")
+            all_ids.extend(followings)
+            time.sleep(0.2)
+        except Exception as e:
+            print(f"[{i}/{len(seed_usernames)}] {username}: Error fetching followings - {e}")
+
+    unique_ids = list(set(all_ids))
+    print(f"\nConverting {len(unique_ids)} unique IDs to usernames...")
+    usernames = convert_ids_to_usernames(unique_ids, rapid_api_key)
+    print(f"Converted to {len(usernames)} usernames")
+
+    result = set(usernames)
+    save_followings(raw_dir, category, result)
+    print(f"Saved followings to {raw_dir / f'{category}_followings.json'}")
+    return result
+
+
 def extract_interacting_users(tweets_data: dict) -> set:
     users = set()
 
@@ -256,12 +363,22 @@ def extract_interacting_users(tweets_data: dict) -> set:
 
 
 def main():
+    if len(sys.argv) < 2:
+        print("Usage: python fetch_tweets.py <category>")
+        print("Example: python fetch_tweets.py crypto")
+        sys.exit(1)
+
+    category = sys.argv[1]
+
     api_key = os.environ.get("TWITTER_API_KEY")
     if not api_key:
         raise ValueError("TWITTER_API_KEY environment variable not set")
 
+    rapid_api_key = os.environ.get("RAPID_API_KEY")
+    if not rapid_api_key:
+        raise ValueError("RAPID_API_KEY environment variable not set")
+
     config = load_config()
-    category = os.environ.get("CATEGORY", "crypto")
 
     look_back = config.get("look_back", {})
     year = look_back.get("year", 2026)
@@ -269,7 +386,7 @@ def main():
     cutoff_date = datetime(year, month, 1)
 
     parallel_requests = look_back.get("parallel_requests", 100)
-    max_tweets = look_back.get("max_tweets", 100)
+    max_tweets = look_back.get("extended_max_tweets", 100)
 
     raw_dir = Path(__file__).parent / "raw"
 
@@ -282,10 +399,18 @@ def main():
     # Extract interacting users
     seed_usernames = set(seed_tweets.keys())
     interacting_users = extract_interacting_users(seed_tweets)
-    extended_users = interacting_users - seed_usernames
 
-    print(f"Seed users: {len(seed_usernames)}")
+    # Fetch followings of seed peers
+    print("\nFetching followings of seed peers...")
+    followings = fetch_followings_for_seeds(seed_usernames, rapid_api_key, raw_dir, category)
+
+    # Combine interacting users and followings
+    all_extended = interacting_users | followings
+    extended_users = all_extended - seed_usernames
+
+    print(f"\nSeed users: {len(seed_usernames)}")
     print(f"Interacting users found: {len(interacting_users)}")
+    print(f"Followings found: {len(followings)}")
     print(f"Extended users (excluding seeds): {len(extended_users)}")
 
     all_users = sorted(extended_users)
@@ -322,17 +447,15 @@ def main():
 
         elapsed = datetime.now() - start_time
 
-        if batches_in_current_file >= BATCHES_PER_FILE or batch_num == total_batches:
-            checkpoint_path = get_checkpoint_path(raw_dir, category, current_file_index)
-            print(f"Saving data file {checkpoint_path}... (elapsed: {elapsed})")
-            save_checkpoint(checkpoint_path, current_file_results, current_file_processed)
+        checkpoint_path = get_checkpoint_path(raw_dir, category, current_file_index)
+        print(f"Saving data file {checkpoint_path}... (elapsed: {elapsed})")
+        save_checkpoint(checkpoint_path, current_file_results, current_file_processed)
 
+        if batches_in_current_file >= BATCHES_PER_FILE:
             current_file_index += 1
             current_file_results = {}
             current_file_processed = set()
             batches_in_current_file = 0
-        else:
-            print(f"Batch {batch_num} done (elapsed: {elapsed})")
 
     print(f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Total elapsed: {datetime.now() - start_time}")
