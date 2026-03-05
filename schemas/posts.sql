@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS posts (
     id SERIAL PRIMARY KEY,
-    topic_id INTEGER NOT NULL REFERENCES topics(id),
+    event_id INTEGER NOT NULL REFERENCES events(event_id),
     run_id INTEGER NOT NULL,
     post_id VARCHAR(255) NOT NULL,
     text TEXT NOT NULL,
@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS posts (
     relevancy_score REAL,
     weight REAL,
     probabilities REAL[],
-    UNIQUE(topic_id, run_id, post_id)
+    UNIQUE(event_id, run_id, post_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_posts_topic_id ON posts(topic_id);
-CREATE INDEX IF NOT EXISTS idx_posts_run_id ON posts(topic_id, run_id);
+CREATE INDEX IF NOT EXISTS idx_posts_event_id ON posts(event_id);
+CREATE INDEX IF NOT EXISTS idx_posts_run_id ON posts(event_id, run_id);
 CREATE INDEX IF NOT EXISTS idx_posts_post_id ON posts(post_id);
 CREATE INDEX IF NOT EXISTS idx_posts_author_id ON posts(author_id);

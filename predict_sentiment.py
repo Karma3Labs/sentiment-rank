@@ -25,9 +25,14 @@ def get_topic_by_name(config: dict, topic_name: str) -> dict | None:
     return None
 
 
+def get_outcomes_from_markets(topic: dict) -> list[str]:
+    markets = topic.get("markets", [])
+    return [m["name"] for m in markets]
+
+
 def build_prompt(post: dict, topic: dict) -> str:
     topic_description = topic.get("description", "")
-    outcomes = topic.get("outcome", ["yes", "no"])
+    outcomes = get_outcomes_from_markets(topic)
     outcomes_str = ", ".join(f'"{o}"' for o in outcomes)
 
     return f"""You are analyzing a social media post to predict which outcome it supports.
@@ -48,7 +53,7 @@ Response:"""
 
 def predict_openai(post: dict, topic: dict, api_key: str) -> list[float] | None:
     prompt = build_prompt(post, topic)
-    outcomes = topic.get("outcome", ["yes", "no"])
+    outcomes = get_outcomes_from_markets(topic)
 
     try:
         response = requests.post(
@@ -86,7 +91,7 @@ def predict_openai(post: dict, topic: dict, api_key: str) -> list[float] | None:
 
 def predict_claude(post: dict, topic: dict, api_key: str) -> list[float] | None:
     prompt = build_prompt(post, topic)
-    outcomes = topic.get("outcome", ["yes", "no"])
+    outcomes = get_outcomes_from_markets(topic)
 
     try:
         response = requests.post(
@@ -184,7 +189,7 @@ def main():
     print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Topic: {topic_name}")
     print(f"Description: {topic.get('description')}")
-    print(f"Outcomes: {topic.get('outcome')}")
+    print(f"Outcomes: {get_outcomes_from_markets(topic)}")
     print(f"Total posts (score > 0.5): {total}")
 
     predictions = []

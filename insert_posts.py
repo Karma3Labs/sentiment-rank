@@ -19,12 +19,12 @@ def main():
     )
     cur = conn.cursor()
 
-    cur.execute("SELECT id, name FROM topics")
-    topics = {name: id for id, name in cur.fetchall()}
+    cur.execute("SELECT event_id, name FROM events")
+    events = {name: event_id for event_id, name in cur.fetchall()}
 
     run_id = 1
 
-    for topic_name, topic_id in topics.items():
+    for topic_name, event_id in events.items():
         base_path = f"raw/{topic_name}"
 
         if not os.path.exists(f"{base_path}.json"):
@@ -60,18 +60,18 @@ def main():
             cur.execute(
                 """
                 INSERT INTO posts (
-                    topic_id, run_id, post_id, text, posted_at,
+                    event_id, run_id, post_id, text, posted_at,
                     like_count, retweet_count, reply_count, quote_count,
                     author_id, author_username, author_name, author_followers, author_is_verified,
                     relevancy_score, weight, probabilities
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (topic_id, run_id, post_id) DO UPDATE SET
+                ON CONFLICT (event_id, run_id, post_id) DO UPDATE SET
                     relevancy_score = EXCLUDED.relevancy_score,
                     weight = EXCLUDED.weight,
                     probabilities = EXCLUDED.probabilities
                 """,
                 (
-                    topic_id,
+                    event_id,
                     run_id,
                     post_id,
                     post["text"],

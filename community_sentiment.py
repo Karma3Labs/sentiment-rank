@@ -18,6 +18,11 @@ def get_topic_by_name(config: dict, topic_name: str) -> dict | None:
     return None
 
 
+def get_outcomes_from_markets(topic: dict) -> list[str]:
+    markets = topic.get("markets", [])
+    return [m["name"] for m in markets]
+
+
 def load_json(path: Path) -> list:
     if not path.exists():
         print(f"File not found: {path}")
@@ -39,7 +44,7 @@ def main():
         print(f"Topic '{topic_name}' not found in config.toml")
         sys.exit(1)
 
-    outcomes = topic.get("outcome", ["yes", "no"])
+    outcomes = get_outcomes_from_markets(topic)
     raw_dir = Path(__file__).parent / "raw"
 
     predictions = load_json(raw_dir / f"{topic_name}_prediction.json")
