@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import psycopg2
 from dotenv import load_dotenv
@@ -6,21 +7,36 @@ from datetime import datetime
 
 load_dotenv()
 
+
+def get_db_connection():
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
+
+
 def parse_twitter_date(date_str):
     return datetime.strptime(date_str, "%a %b %d %H:%M:%S %z %Y")
 
+
+def format_predictions(probs, market_ids):
+    if not probs or not market_ids:
+        return None
+    preds = [f'"({mid},{prob})"' for mid, prob in zip(market_ids, probs)]
+    return "{" + ",".join(preds) + "}"
+
+def parse_market_ids(markets_str):
+    matches = re.findall(r'\((\d+),', markets_str)
+    return [int(m) for m in matches]
+
+
 def main():
-    conn = psycopg2.connect(
-        host="localhost",
-        port=os.getenv("SQL_PORT"),
-        user=os.getenv("SQL_USERNAME"),
-        password=os.getenv("SQL_PASSWORD"),
-        database=os.getenv("SQL_DB"),
-    )
+    conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT event_id, name FROM events")
-    events = {name: event_id for event_id, name in cur.fetchall()}
+    cur.execute("SELECT event_id, name, markets FROM twitter_sentiment.events")
+    events = {}
+    event_markets = {}
+    for event_id, name, markets in cur.fetchall():
+        events[name] = event_id
+        event_markets[event_id] = parse_market_ids(markets)
 
     run_id = 1
 
@@ -34,6 +50,7 @@ def main():
         with open(f"{base_path}.json") as f:
             posts = json.load(f)
 
+        market_ids = event_markets.get(event_id, [])
         predictions = {}
         if os.path.exists(f"{base_path}_prediction.json"):
             with open(f"{base_path}_prediction.json") as f:
@@ -59,16 +76,16 @@ def main():
 
             cur.execute(
                 """
-                INSERT INTO posts (
+                INSERT INTO twitter_sentiment.posts (
                     event_id, run_id, post_id, text, posted_at,
                     like_count, retweet_count, reply_count, quote_count,
                     author_id, author_username, author_name, author_followers, author_is_verified,
-                    relevancy_score, weight, probabilities
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    relevancy_score, weight, predictions
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::twitter_sentiment.prediction[])
                 ON CONFLICT (event_id, run_id, post_id) DO UPDATE SET
                     relevancy_score = EXCLUDED.relevancy_score,
                     weight = EXCLUDED.weight,
-                    probabilities = EXCLUDED.probabilities
+                    predictions = EXCLUDED.predictions
                 """,
                 (
                     event_id,
@@ -87,7 +104,7 @@ def main():
                     author.get("isBlueVerified", False),
                     relevancy.get(post_id),
                     weights.get(post_id),
-                    predictions.get(post_id),
+                    format_predictions(predictions.get(post_id), market_ids),
                 ),
             )
             count += 1

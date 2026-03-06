@@ -6,55 +6,42 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def get_outcomes_from_markets(topic: dict) -> list[str]:
-    markets = topic.get("markets", [])
-    return [m["name"] for m in markets]
-
-
-def get_market_ids_from_markets(topic: dict) -> list[int]:
-    markets = topic.get("markets", [])
-    return [m["id"] for m in markets]
+def get_db_connection():
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 def main():
-    conn = psycopg2.connect(
-        host="localhost",
-        port=os.getenv("SQL_PORT"),
-        user=os.getenv("SQL_USERNAME"),
-        password=os.getenv("SQL_PASSWORD"),
-        database=os.getenv("SQL_DB"),
-    )
+    conn = get_db_connection()
     cur = conn.cursor()
 
     with open("config.toml", "rb") as f:
         config = tomllib.load(f)
 
     for topic in config["topics"]:
-        outcomes = get_outcomes_from_markets(topic)
-        market_ids = get_market_ids_from_markets(topic)
+        markets = topic.get("markets", [])
+        markets_array = [f'"({m["id"]},\\"{m["name"]}\\\")"' for m in markets]
+        markets_literal = "{" + ",".join(markets_array) + "}"
         cur.execute(
             """
-            INSERT INTO events (event_id, name, description, outcomes, query, hashtags, category, market_ids)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO twitter_sentiment.events (event_id, name, description, markets, query, hashtags, category)
+            VALUES (%s, %s, %s, %s::twitter_sentiment.market[], %s, %s, %s)
             ON CONFLICT (event_id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
-                outcomes = EXCLUDED.outcomes,
+                markets = EXCLUDED.markets,
                 query = EXCLUDED.query,
                 hashtags = EXCLUDED.hashtags,
                 category = EXCLUDED.category,
-                market_ids = EXCLUDED.market_ids,
                 updated_at = CURRENT_TIMESTAMP
             """,
             (
                 topic["event_id"],
                 topic["name"],
                 topic["description"],
-                outcomes,
+                markets_literal,
                 topic["query"],
                 topic.get("hashtags"),
                 topic["category"],
-                market_ids,
             ),
         )
 

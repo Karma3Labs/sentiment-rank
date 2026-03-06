@@ -49,16 +49,11 @@ politics = [
 event_id = 36173
 name = "btc_150k"
 description = "When will Bitcoin hit $150k?"
-markets = [{
-    name = "by March 31, 2026",
-    id = 573654
-}, {
-    name = "by June 30, 2026",
-    id = 573655
-}, {
-    name = "by December 31, 2026"
-    id = 573653
-}]
+markets = [
+    { name = "by March 31, 2026", id = 573654 },
+    { name = "by June 30, 2026", id = 573655 },
+    { name = "by December 31, 2026", id = 573653 }
+]
 query = "(bitcoin OR BTC OR $BTC) (150k OR 150000 OR 150,000) (price OR prediction OR forecast OR target OR when OR hit OR reach OR ATH OR all-time high) lang:en -filter:retweets"
 hashtags = ["#BTC", "#Bitcoin", "#BTCPrice", "#BitcoinATH", "#Bitcoin150k"]
 category = "crypto"
@@ -67,28 +62,15 @@ category = "crypto"
 event_id = 28999
 name = "megaeth_fdv"
 description = "MegaETH market cap (FDV) one day after launch?"
-markets = [{
-    name = ">$800M",
-    id = 1373744
-}, {
-    name = ">$1B",
-    id = 965261
-}, {
-    name = ">$1.5B",
-    id = 1299187
-}, {
-    name = ">$2B",
-    id = 556062
-}, {
-    name = ">$3B",
-    id = 666614
-}, {
-    name = ">$4B",
-    id = 636111
-}, {
-    name = ">$6B",
-    id = 556063
-}]
+markets = [
+    { name = ">$800M", id = 1373744 },
+    { name = ">$1B", id = 965261 },
+    { name = ">$1.5B", id = 1299187 },
+    { name = ">$2B", id = 556062 },
+    { name = ">$3B", id = 666614 },
+    { name = ">$4B", id = 636111 },
+    { name = ">$6B", id = 556063 }
+]
 query = "(megaeth OR mega-eth OR @megaeth_labs) (FDV OR valuation OR market cap OR launch OR token) lang:en -filter:retweets"
 hashtags = ["#MegaETH", "#MEGA"]
 category = "crypto"
@@ -97,19 +79,12 @@ category = "crypto"
 event_id = 107009
 name = "eth_ath"
 description = "Ethereum all time high by ___?"
-markets = [{
-    name = "March 31, 2026",
-    id = 951178
-}, {
-    name = "June 30, 2026",
-    id = 951179
-}, {
-    name = "September 30, 2026",
-    id = 951180
-}, {
-    name = "December 31, 2026",
-    id = 951181
-}]
+markets = [
+    { name = "March 31, 2026", id = 951178 },
+    { name = "June 30, 2026", id = 951179 },
+    { name = "September 30, 2026", id = 951180 },
+    { name = "December 31, 2026", id = 951181 }
+]
 query = "(ethereum OR ETH OR $ETH) (ATH OR all-time high OR all time high OR new high OR record high) lang:en -filter:retweets"
 hashtags = ["#ETH", "#Ethereum", "#ETHATH"]
 category = "crypto"
@@ -118,23 +93,13 @@ category = "crypto"
 event_id = 52130
 name = "opensea_fdv"
 description = "Opensea FDV above ___ one day after launch?"
-outcome = [">$500M", ">$1B", ">$2B", ">$3B", ">$5B"]
-markets = [{
-    name = ">$500M",
-    id = 618454
-}, {
-    name = ">$1B",
-    id = 618455
-}, {
-    name = ">$2B",
-    id = 936450
-}, {
-    name = ">$3B",
-    id = 618456
-}, {
-    name = ">$5B",
-    id = 620682
-}]
+markets = [
+    { name = ">$500M", id = 618454 },
+    { name = ">$1B", id = 618455 },
+    { name = ">$2B", id = 936450 },
+    { name = ">$3B", id = 618456 },
+    { name = ">$5B", id = 620682 }
+]
 query = "(opensea OR @opensea) (FDV OR valuation OR market cap OR launch OR token) lang:en -filter:retweets"
 hashtags = ["#OpenSea", "#NFT"]
 category = "crypto"
@@ -143,22 +108,13 @@ category = "crypto"
 event_id = 30829
 name = "dem_nominee_2028"
 description = "Democratic Presidential Nominee 2028"
-markets = [{
-    name = "Gavin Newsom",
-    id = 559652
-}, {
-    name = "Alexandria Ocasio-Cortez",
-    id = 559653
-}, {
-    name = "Kamala Harris",
-    id = 559658
-}, {
-    name = "Josh Shapiro",
-    id = 559655
-}, {
-    name = "Pete Buttigieg",
-    id = 559654
-}]
+markets = [
+    { name = "Gavin Newsom", id = 559652 },
+    { name = "Alexandria Ocasio-Cortez", id = 559653 },
+    { name = "Kamala Harris", id = 559658 },
+    { name = "Josh Shapiro", id = 559655 },
+    { name = "Pete Buttigieg", id = 559654 }
+]
 query = "(democrat OR democratic) (2028 OR nominee OR presidential OR primary) (Newsom OR AOC OR Ocasio-Cortez OR Harris OR Shapiro OR Buttigieg OR Whitmer OR Pritzker) lang:en -filter:retweets"
 hashtags = ["#Democrats", "#2028Election", "#DemPrimary"]
 category = "politics"
@@ -167,19 +123,12 @@ category = "politics"
 event_id = 67284
 name = "fed_march"
 description = "Fed decision in March?"
-markets = [{
-    name = "50+ bps decrease",
-    id = 654412
-}, {
-    name = "25 bps decrease",
-    id = 654413
-}, {
-    name = "No change",
-    id = 654414
-}, {
-    name = "25+ bps increase",
-    id = 654415
-}]
+markets = [
+    { name = "50+ bps decrease", id = 654412 },
+    { name = "25 bps decrease", id = 654413 },
+    { name = "No change", id = 654414 },
+    { name = "25+ bps increase", id = 654415 }
+]
 query = "(fed OR federal reserve OR FOMC OR Powell) (march OR rate OR cut OR hike OR decision OR bps OR basis points) lang:en -filter:retweets"
 hashtags = ["#Fed", "#FOMC", "#InterestRates"]
 category = "politics"
@@ -188,13 +137,10 @@ category = "politics"
 event_id = 32224
 name = "senate_2026"
 description = "Which party will win the Senate in 2026?"
-markets = [{
-    name = "Republican Party",
-    id = 562794
-}, {
-    name = "Democratic Party",
-    id = 562793
-}]
+markets = [
+    { name = "Republican Party", id = 562794 },
+    { name = "Democratic Party", id = 562793 }
+]
 query = "(senate OR midterm OR midterms) (2026 OR election) (republican OR democrat OR GOP OR DNC OR control OR win OR flip) lang:en -filter:retweets"
 hashtags = ["#Senate", "#Midterms2026", "#Election2026"]
 category = "politics"
