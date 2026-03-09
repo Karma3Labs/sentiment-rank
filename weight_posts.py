@@ -1,9 +1,6 @@
-import os
 import sys
 import json
 import tomllib
-import csv
-import glob
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -37,96 +34,57 @@ def load_relevancy(raw_dir: Path, topic_name: str) -> dict[str, float]:
     return {r["post_id"]: r["relevancy_score"] for r in relevancy}
 
 
-def load_user_scores(scores_dir: Path, category: str) -> dict[str, float]:
-    filepath = scores_dir / f"{category}_processed.csv"
-    if not filepath.exists():
-        print(f"Scores file not found: {filepath}")
-        return {}
-
-    scores = {}
-    with open(filepath, "r") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            scores[row["i"]] = float(row["v"])
-    return scores
-
-
-def weight_posts(posts: list[dict], user_scores: dict[str, float], weights: dict) -> list[dict]:
+def weight_posts(posts: list[dict], weights: dict) -> list[dict]:
     reply_weight = weights.get("reply", 0)
     retweet_weight = weights.get("retweet", 0)
     quote_weight = weights.get("quote", 0)
-    post_weight = weights.get("post", 0)
 
     results = []
-    users_without_score = set()
-    users_with_score = set()
 
     for post in posts:
         post_id = post.get("id")
-        total_weight = 0.0
 
-        author = post.get("author", {})
-        author_id = author.get("id")
-        if author_id:
-            if author_id not in user_scores:
-                users_without_score.add(author_id)
-            else:
-                users_with_score.add(author_id)
-            total_weight += user_scores.get(author_id, 0.1) * post_weight
+        num_replies = len(post.get("replies", []))
+        num_retweets = len(post.get("retweeters", []))
+        num_quotes = len(post.get("quotes", []))
 
-        for reply in post.get("replies", []):
-            author = reply.get("author", {})
-            user_id = author.get("id")
-            if user_id:
-                if user_id not in user_scores:
-                    users_without_score.add(user_id)
-                else:
-                    users_with_score.add(user_id)
-                total_weight += user_scores.get(user_id, 0.1) * reply_weight
-
-        for retweeter in post.get("retweeters", []):
-            user_id = retweeter.get("id")
-            if user_id:
-                if user_id not in user_scores:
-                    users_without_score.add(user_id)
-                else:
-                    users_with_score.add(user_id)
-                total_weight += user_scores.get(user_id, 0.1) * retweet_weight
-
-        for quote in post.get("quotes", []):
-            author = quote.get("author", {})
-            user_id = author.get("id")
-            if user_id:
-                if user_id not in user_scores:
-                    users_without_score.add(user_id)
-                else:
-                    users_with_score.add(user_id)
-                total_weight += user_scores.get(user_id, 0.1) * quote_weight
+        total_weight = (num_replies * reply_weight +
+                        num_retweets * retweet_weight +
+                        num_quotes * quote_weight)
 
         results.append({
             "post_id": post_id,
             "weight": total_weight
         })
 
-    print(f"Users with eigentrust score: {len(users_with_score)}")
-    print(f"Users without eigentrust score: {len(users_without_score)}")
     return results
 
 
+def get_topic(config: dict, topic_name: str) -> dict | None:
+    for topic in config.get("topics", []):
+        if topic.get("name") == topic_name:
+            return topic
+    return None
+
+
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python weight_posts.py <topic_name> <category>")
-        print("Example: python weight_posts.py btc_price_prediction crypto")
+    if len(sys.argv) < 2:
+        print("Usage: python weight_posts.py <topic_name>")
+        print("Example: python weight_posts.py btc_price_prediction")
         sys.exit(1)
 
     topic_name = sys.argv[1]
-    category = sys.argv[2]
 
     config = load_config()
+
+    topic = get_topic(config, topic_name)
+    if not topic:
+        print(f"Topic '{topic_name}' not found in config.toml")
+        sys.exit(1)
+
     weights = config.get("trust_weights", {})
 
     raw_dir = Path(__file__).parent / "raw"
-    scores_dir = Path(__file__).parent / "scores"
 
     print("Loading posts...")
     posts = load_posts(raw_dir, topic_name)
@@ -139,12 +97,8 @@ def main():
     relevant_posts = [p for p in posts if relevancy_map.get(p.get("id"), 0) > 0.5]
     print(f"Posts with score > 0.5: {len(relevant_posts)}")
 
-    print(f"Loading user scores for {category}...")
-    user_scores = load_user_scores(scores_dir, category)
-    print(f"Loaded {len(user_scores)} user scores")
-
     print("Weighting posts...")
-    weighted = weight_posts(relevant_posts, user_scores, weights)
+    weighted = weight_posts(relevant_posts, weights)
 
     weighted.sort(key=lambda x: x["weight"], reverse=True)
 

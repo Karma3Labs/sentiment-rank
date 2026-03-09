@@ -263,6 +263,7 @@ def convert_ids_to_usernames(ids: list[str], rapid_api_key: str) -> list[str]:
     usernames = []
     batch_size = 100
     total_batches = (len(ids) + batch_size - 1) // batch_size
+    max_retries = 3
 
     for i in range(0, len(ids), batch_size):
         batch_num = i // batch_size + 1
@@ -270,22 +271,40 @@ def convert_ids_to_usernames(ids: list[str], rapid_api_key: str) -> list[str]:
         print(f"[{batch_num}/{total_batches}] Converting IDs {i+1}-{min(i+batch_size, len(ids))}...")
         ids_param = "%2C".join(str(id) for id in batch)
 
-        conn = http.client.HTTPSConnection("twitter241.p.rapidapi.com")
-        headers = {
-            'x-rapidapi-key': rapid_api_key,
-            'x-rapidapi-host': "twitter241.p.rapidapi.com"
-        }
-        conn.request("GET", f"/get-users-v2?users={ids_param}", headers=headers)
-        res = conn.getresponse()
-        data = res.read()
-        result = json.loads(data.decode("utf-8"))
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                conn = http.client.HTTPSConnection("twitter241.p.rapidapi.com")
+                headers = {
+                    'x-rapidapi-key': rapid_api_key,
+                    'x-rapidapi-host': "twitter241.p.rapidapi.com"
+                }
+                conn.request("GET", f"/get-users-v2?users={ids_param}", headers=headers)
+                res = conn.getresponse()
+                data = res.read()
+                result = json.loads(data.decode("utf-8"))
 
-        users = result.get("result", [])
-        for user in users:
-            legacy = user.get("legacy", {})
-            screen_name = legacy.get("screen_name")
-            if screen_name:
-                usernames.append(screen_name)
+                if res.status != 200:
+                    raise Exception(f"HTTP {res.status} - {result}")
+
+                users = result.get("result", [])
+                if not users:
+                    raise Exception(f"No users returned. Response: {result}")
+
+                for user in users:
+                    screen_name = user.get("screen_name")
+                    if screen_name:
+                        usernames.append(screen_name)
+
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                print(f"  Attempt {attempt + 1}/{max_retries} failed: {e}")
+                time.sleep(1)
+
+        if last_error:
+            raise Exception(f"RapidAPI error after {max_retries} retries: {last_error}")
 
         time.sleep(0.2)
 

@@ -65,7 +65,7 @@ def predict_openai(post: dict, topic: dict, api_key: str) -> list[float] | None:
             json={
                 "model": "gpt-4o-mini",
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 50,
+                "max_tokens": 200,
                 "temperature": 0
             },
             timeout=30
@@ -73,7 +73,11 @@ def predict_openai(post: dict, topic: dict, api_key: str) -> list[float] | None:
         response.raise_for_status()
         result = response.json()
         text = result["choices"][0]["message"]["content"].strip()
-        probs = json.loads(text)
+        try:
+            probs = json.loads(text)
+        except json.JSONDecodeError:
+            print(f"OpenAI returned invalid JSON for post {post.get('id')}: {text}")
+            return None
         if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
             return probs
         return None
@@ -103,7 +107,7 @@ def predict_claude(post: dict, topic: dict, api_key: str) -> list[float] | None:
             },
             json={
                 "model": "claude-sonnet-4-20250514",
-                "max_tokens": 50,
+                "max_tokens": 200,
                 "messages": [{"role": "user", "content": prompt}]
             },
             timeout=30
@@ -111,7 +115,11 @@ def predict_claude(post: dict, topic: dict, api_key: str) -> list[float] | None:
         response.raise_for_status()
         result = response.json()
         text = result["content"][0]["text"].strip()
-        probs = json.loads(text)
+        try:
+            probs = json.loads(text)
+        except json.JSONDecodeError:
+            print(f"Claude returned invalid JSON for post {post.get('id')}: {text}")
+            return None
         if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
             return probs
         return None

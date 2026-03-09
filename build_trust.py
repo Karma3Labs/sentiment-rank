@@ -1,6 +1,7 @@
 import json
 import tomllib
 import glob
+import sys
 from pathlib import Path
 from collections import defaultdict
 import csv
@@ -141,9 +142,12 @@ def save_trust_csv(trust: dict, trust_dir: Path, category: str):
 
 
 def main():
-    import os
+    if len(sys.argv) < 2:
+        print("Usage: python build_trust.py <category>")
+        sys.exit(1)
+
+    category = sys.argv[1]
     config = load_config()
-    category = os.environ.get("CATEGORY", "crypto")
     weights = config.get("trust_weights", {})
 
     seed_peers = config.get("seed_peers", {}).get(category, [])

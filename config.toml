@@ -15,6 +15,12 @@ extended_max_tweets = 100
 [search_look_back]
 days = 30
 
+[fetch_limits]
+max_replies = 250
+max_quotes = 250
+max_retweeters = 250
+max_pages = 40
+
 [seed_peers]
 crypto = [
     "@intocryptoverse",
@@ -41,6 +47,29 @@ politics = [
     "@AnaKasparian",
     "@SteveSchmidtSES",
     "@benshapiro"
+]
+
+sports = [
+    "@SharpFootball",
+    "@ToddFuhrman",
+    "@BenjaminSolak",
+    "@FezzikSports",
+    "@betfirmsjack",
+    "@KyleHunterPicks",
+    "@PatMcAfeeShow",
+    "@BillSimmons"
+]
+
+finance = [
+    "@CathieDWood",
+    "@EconguyRosie",
+    "@PeterLBrandt",
+    "@lisaabramowicz1",
+    "@NickTimiraos",
+    "@TruthGundlach",
+    "@LizAnnSonders",
+    "@elerianm",
+    "@AswathDamodaran",
 ]
 
 # Topic definitions
@@ -144,6 +173,177 @@ markets = [
 query = "(senate OR midterm OR midterms) (2026 OR election) (republican OR democrat OR GOP OR DNC OR control OR win OR flip) lang:en -filter:retweets"
 hashtags = ["#Senate", "#Midterms2026", "#Election2026"]
 category = "politics"
+
+[[topics]]
+event_id = 143443
+name = "venezuela_leader"
+description = "Venezuela leader end of 2026?"
+markets = [
+    { name = "Edmundo González", id = 1105740 },
+    { name = "María Corina Machado", id = 1105741 },
+    { name = "Delcy Rodríguez", id = 1105742 },
+    { name = "Nicolás Maduro", id = 1105744 },
+    { name = "Diosdado Cabello Rondón", id = 1105743 },
+    { name = "Dinorah Figuera", id = 1105745 },
+    { name = "No Head of State", id = 1105755 }
+]
+query = "(Venezuela OR Maduro OR Machado OR Gonzalez OR Edmundo) (president OR leader OR gobierno OR dictator OR opposition) lang:en -filter:retweets"
+hashtags = ["#Venezuela", "#Maduro", "#Machado"]
+category = "politics"
+
+[[topics]]
+event_id = 27830
+name = "nba_champion_2026"
+description = "2026 NBA Champion"
+markets = [
+    { name = "Oklahoma City Thunder", id = 553856 },
+    { name = "San Antonio Spurs", id = 553866 },
+    { name = "Boston Celtics", id = 553862 },
+    { name = "Denver Nuggets", id = 553865 },
+    { name = "Cleveland Cavaliers", id = 553857 },
+    { name = "Detroit Pistons", id = 553871 },
+    { name = "New York Knicks", id = 553858 },
+    { name = "Minnesota Timberwolves", id = 553859 },
+    { name = "Houston Rockets", id = 553860 },
+    { name = "Los Angeles Lakers", id = 553863 }
+]
+query = "(NBA OR basketball) (champion OR championship OR finals OR title OR winner OR ring) (2026 OR Thunder OR Spurs OR Celtics OR Nuggets OR Cavaliers OR Pistons OR Knicks OR Timberwolves OR Rockets OR Lakers) lang:en -filter:retweets"
+hashtags = ["#NBA", "#NBAFinals", "#NBAChampion", "#NBAPlayoffs"]
+category = "sports"
+
+[[topics]]
+event_id = 30615
+name = "fifa_world_cup_2026"
+description = "2026 FIFA World Cup Winner"
+markets = [
+    { name = "Spain", id = 558934 },
+    { name = "England", id = 558935 },
+    { name = "France", id = 558936 },
+    { name = "Brazil", id = 558937 },
+    { name = "Argentina", id = 558938 },
+    { name = "Germany", id = 558939 },
+    { name = "Portugal", id = 558940 },
+    { name = "Netherlands", id = 558941 },
+    { name = "Italy", id = 558942 },
+    { name = "USA", id = 558943 }
+]
+query = "(FIFA OR World Cup OR soccer OR football) (2026 OR winner OR champion) (Spain OR England OR France OR Brazil OR Argentina OR Germany OR Portugal OR Netherlands OR Italy OR USA) lang:en -filter:retweets"
+hashtags = ["#WorldCup", "#FIFA", "#WorldCup2026", "#FIFAWorldCup"]
+category = "sports"
+
+[[topics]]
+event_id = 33506
+name = "ucl_winner_2026"
+description = "UEFA Champions League Winner 2025-26"
+markets = [
+    { name = "Arsenal", id = 566140 },
+    { name = "Bayern Munich", id = 566142 },
+    { name = "Barcelona", id = 566138 },
+    { name = "Real Madrid", id = 566139 },
+    { name = "Man City", id = 566141 },
+    { name = "Liverpool", id = 566137 },
+    { name = "PSG", id = 566136 },
+    { name = "Chelsea", id = 566143 },
+    { name = "Atletico Madrid", id = 566146 },
+    { name = "Tottenham", id = 566149 }
+]
+query = "(Champions League OR UCL) (winner OR champion OR final OR trophy) (Arsenal OR Bayern OR Barcelona OR Real Madrid OR Man City OR Liverpool OR PSG OR Chelsea OR Atletico) lang:en -filter:retweets"
+hashtags = ["#UCL", "#ChampionsLeague", "#UEFA"]
+category = "sports"
+
+[[topics]]
+event_id = 27829
+name = "nhl_stanley_cup_2026"
+description = "2026 NHL Stanley Cup Champion"
+markets = [
+    { name = "Colorado Avalanche", id = 553828 },
+    { name = "Tampa Bay Lightning", id = 553830 },
+    { name = "Carolina Hurricanes", id = 553824 },
+    { name = "Edmonton Oilers", id = 553826 },
+    { name = "Dallas Stars", id = 553827 },
+    { name = "Vegas Golden Knights", id = 553829 },
+    { name = "Minnesota Wild", id = 553838 },
+    { name = "Buffalo Sabres", id = 553851 },
+    { name = "Florida Panthers", id = 553825 },
+    { name = "Los Angeles Kings", id = 553831 }
+]
+query = "(NHL OR Stanley Cup OR hockey) (champion OR winner OR playoffs OR finals) (Avalanche OR Lightning OR Hurricanes OR Oilers OR Stars OR Golden Knights OR Wild OR Sabres OR Panthers OR Kings) lang:en -filter:retweets"
+hashtags = ["#NHL", "#StanleyCup", "#Hockey"]
+category = "sports"
+
+[[topics]]
+event_id = 16167
+name = "mstr_sell_btc"
+description = "MicroStrategy sells any Bitcoin by ___?"
+markets = [
+    { name = "March 31, 2026", id = 692250 },
+    { name = "June 30, 2026", id = 692258 },
+    { name = "December 31, 2026", id = 824952 }
+]
+query = "(MicroStrategy OR MSTR OR Saylor) (sell OR selling OR sold OR dump OR liquidate) (bitcoin OR BTC) lang:en -filter:retweets"
+hashtags = ["#MicroStrategy", "#MSTR", "#Bitcoin", "#BTC"]
+category = "finance"
+
+[[topics]]
+event_id = 86832
+name = "companies_acquired_2027"
+description = "Which companies will be acquired before 2027?"
+markets = [
+    { name = "OpenAI", id = 700398 },
+    { name = "Anthropic", id = 700397 },
+    { name = "Perplexity AI", id = 700396 },
+    { name = "Lovable", id = 700395 },
+    { name = "GitLab", id = 694940 },
+    { name = "Ubisoft", id = 694939 },
+    { name = "Viking Therapeutics", id = 694938 },
+    { name = "BP", id = 694937 },
+    { name = "Nebius Group", id = 694936 },
+    { name = "Zoom", id = 694935 },
+    { name = "Snapchat", id = 694932 },
+    { name = "Pizza Hut", id = 694941 }
+]
+query = "(acquired OR acquisition OR buyout OR takeover OR merger) (OpenAI OR Anthropic OR Perplexity OR Lovable OR GitLab OR Ubisoft OR Viking OR BP OR Nebius OR Zoom OR Snapchat OR \"Pizza Hut\") lang:en -filter:retweets"
+hashtags = ["#Acquisition", "#MA", "#Takeover", "#Merger"]
+category = "finance"
+
+[[topics]]
+event_id = 79039
+name = "largest_company_march"
+description = "Largest Company end of March?"
+markets = [
+    { name = "NVIDIA", id = 676710 },
+    { name = "Microsoft", id = 676711 },
+    { name = "Apple", id = 676712 },
+    { name = "Alphabet", id = 676713 },
+    { name = "Tesla", id = 676714 },
+    { name = "Saudi Aramco", id = 676715 },
+    { name = "Amazon", id = 676716 }
+]
+query = "(NVIDIA OR Microsoft OR Apple OR Alphabet OR Google OR Tesla OR Amazon OR Aramco) (market cap OR largest company OR valuation OR trillion) lang:en -filter:retweets"
+hashtags = ["#NVDA", "#MSFT", "#AAPL", "#GOOG", "#TSLA", "#AMZN", "#MarketCap"]
+category = "finance"
+
+[[topics]]
+event_id = 79048
+name = "ipos_2027"
+description = "IPOs before 2027?"
+markets = [
+    { name = "Discord", id = 676777 },
+    { name = "Stripe", id = 676778 },
+    { name = "SpaceX", id = 676795 },
+    { name = "OpenAI", id = 676785 },
+    { name = "Anthropic", id = 676792 },
+    { name = "Databricks", id = 676796 },
+    { name = "Anduril", id = 676784 },
+    { name = "Cerebras", id = 676780 },
+    { name = "Ledger", id = 1321868 },
+    { name = "SHEIN", id = 1321653 },
+    { name = "Canva", id = 1321866 },
+    { name = "Epic Games", id = 1321867 }
+]
+query = "(IPO OR \"going public\" OR \"public offering\") (Discord OR Stripe OR SpaceX OR OpenAI OR Anthropic OR Databricks OR Anduril OR Cerebras OR Ledger OR SHEIN OR Canva OR \"Epic Games\") lang:en -filter:retweets"
+hashtags = ["#IPO", "#GoingPublic", "#StockMarket"]
+category = "finance"
 
 [trust_weights]
 # Trust weights for different interaction types
