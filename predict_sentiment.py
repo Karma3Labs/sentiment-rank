@@ -51,91 +51,101 @@ For example, if outcomes are ["yes", "no"] and the post strongly suggests "yes",
 Response:"""
 
 
-def predict_openai(post: dict, topic: dict, api_key: str) -> list[float] | None:
+def predict_openai(post: dict, topic: dict, api_key: str, max_retries: int = 3) -> list[float] | None:
     prompt = build_prompt(post, topic)
     outcomes = get_outcomes_from_markets(topic)
+    retries = 0
 
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 200,
-                "temperature": 0
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-        text = result["choices"][0]["message"]["content"].strip()
+    while retries < max_retries:
         try:
-            probs = json.loads(text)
-        except json.JSONDecodeError:
-            print(f"OpenAI returned invalid JSON for post {post.get('id')}: {text}")
-            return None
-        if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
-            return probs
-        return None
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            print(f"OpenAI rate limited, waiting 60s...")
-            time.sleep(60)
-            return predict_openai(post, topic, api_key)
-        print(f"OpenAI error for post {post.get('id')}: {e}")
-        return None
-    except Exception as e:
-        print(f"OpenAI error for post {post.get('id')}: {e}")
-        return None
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200,
+                    "temperature": 0
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            text = result["choices"][0]["message"]["content"].strip()
+            try:
+                probs = json.loads(text)
+            except json.JSONDecodeError:
+                print(f"OpenAI returned invalid JSON, retrying...")
+                retries += 1
+                continue
+            if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
+                return probs
+            print(f"OpenAI returned invalid probs, retrying...")
+            retries += 1
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print(f"OpenAI rate limited, waiting 60s...")
+                time.sleep(60)
+                continue
+            print(f"OpenAI error for post {post.get('id')}: {e}, retrying...")
+            retries += 1
+        except Exception as e:
+            print(f"OpenAI error for post {post.get('id')}: {e}, retrying...")
+            retries += 1
+    return None
 
 
-def predict_claude(post: dict, topic: dict, api_key: str) -> list[float] | None:
+def predict_claude(post: dict, topic: dict, api_key: str, max_retries: int = 3) -> list[float] | None:
     prompt = build_prompt(post, topic)
     outcomes = get_outcomes_from_markets(topic)
+    retries = 0
 
-    try:
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 200,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-        text = result["content"][0]["text"].strip()
+    while retries < max_retries:
         try:
-            probs = json.loads(text)
-        except json.JSONDecodeError:
-            print(f"Claude returned invalid JSON for post {post.get('id')}: {text}")
-            return None
-        if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
-            return probs
-        return None
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            print(f"Claude rate limited, waiting 60s...")
-            time.sleep(60)
-            return predict_claude(post, topic, api_key)
-        print(f"Claude error for post {post.get('id')}: {e}")
-        return None
-    except Exception as e:
-        print(f"Claude error for post {post.get('id')}: {e}")
-        return None
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": 200,
+                    "messages": [{"role": "user", "content": prompt}]
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            text = result["content"][0]["text"].strip()
+            try:
+                probs = json.loads(text)
+            except json.JSONDecodeError:
+                print(f"Claude returned invalid JSON, retrying...")
+                retries += 1
+                continue
+            if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
+                return probs
+            print(f"Claude returned invalid probs, retrying...")
+            retries += 1
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print(f"Claude rate limited, waiting 60s...")
+                time.sleep(60)
+                continue
+            print(f"Claude error for post {post.get('id')}: {e}, retrying...")
+            retries += 1
+        except Exception as e:
+            print(f"Claude error for post {post.get('id')}: {e}, retrying...")
+            retries += 1
+    return None
 
 
-def predict_sentiment(post: dict, topic: dict, openai_key: str, claude_key: str) -> list[float] | None:
+def predict_sentiment(post: dict, topic: dict, openai_key: str, claude_key: str) -> list[float]:
     openai_probs = predict_openai(post, topic, openai_key)
     claude_probs = predict_claude(post, topic, claude_key)
 
@@ -145,7 +155,12 @@ def predict_sentiment(post: dict, topic: dict, openai_key: str, claude_key: str)
         return openai_probs
     elif claude_probs:
         return claude_probs
-    return None
+
+    # Both failed, return uniform distribution
+    outcomes = get_outcomes_from_markets(topic)
+    uniform = 1.0 / len(outcomes)
+    print(f"Both providers failed for post {post.get('id')}, using uniform distribution")
+    return [uniform] * len(outcomes)
 
 
 def main():

@@ -2,24 +2,18 @@
 [search]
 query_type = "Top"  # "Latest" or "Top"
 max_pages = 5  # Maximum pages to fetch per query
-seed_peers_count = 100  # Number of tweets to process for seed peers
+parallel_requests = 10
+max_tweets = 100
 
 [look_back]
 year = 2026
 month = 1
-
-parallel_requests = 100
-max_tweets = 1000
-extended_max_tweets = 100
-
-[search_look_back]
 days = 30
 
 [fetch_limits]
-max_replies = 250
-max_quotes = 250
-max_retweeters = 250
-max_pages = 40
+max_replies = 100
+max_quotes = 100
+max_retweeters = 100
 
 [seed_peers]
 crypto = [
@@ -272,6 +266,99 @@ hashtags = ["#NHL", "#StanleyCup", "#Hockey"]
 category = "sports"
 
 [[topics]]
+event_id = 238477
+name = "eth_price_march"
+description = "What price will Ethereum hit in March 2026?"
+markets = [
+    { name = "↑ 4,000", id = 1473042 },
+    { name = "↑ 3,800", id = 1473046 },
+    { name = "↑ 3,600", id = 1473050 },
+    { name = "↑ 3,400", id = 1473056 },
+    { name = "↑ 3,200", id = 1473059 },
+    { name = "↑ 3,000", id = 1473062 },
+    { name = "↑ 2,800", id = 1473065 },
+    { name = "↑ 2,600", id = 1473067 },
+    { name = "↑ 2,400", id = 1473070 },
+    { name = "↑ 2,200", id = 1473071 },
+    { name = "↓ 1,800", id = 1473076 },
+    { name = "↓ 1,600", id = 1473077 },
+    { name = "↓ 1,400", id = 1473079 },
+    { name = "↓ 1,200", id = 1473081 },
+    { name = "↓ 1,000", id = 1473083 },
+    { name = "↓ 800", id = 1473085 },
+    { name = "↓ 600", id = 1473088 },
+    { name = "↓ 400", id = 1473089 },
+    { name = "↓ 200", id = 1473091 }
+]
+query = "(ethereum OR ETH OR $ETH) (price OR prediction OR forecast OR target) (march OR 2026) lang:en -filter:retweets"
+hashtags = ["#ETH", "#Ethereum", "#ETHPrice"]
+category = "crypto"
+
+[[topics]]
+event_id = 80066
+name = "backpack_fdv"
+description = "Backpack FDV above ___ one day after launch?"
+markets = [
+    { name = "$100M", id = 1534966 },
+    { name = "$200M", id = 1534638 },
+    { name = "$300M", id = 1534637 },
+    { name = "$500M", id = 1340115 },
+    { name = "$700M", id = 763535 },
+    { name = "$1B", id = 679709 },
+    { name = "$2B", id = 679710 },
+    { name = "$3B", id = 679711 },
+    { name = "$4B", id = 679712 },
+    { name = "$5B", id = 679713 }
+]
+query = "(backpack OR @backaborry OR backpack exchange) (FDV OR valuation OR market cap OR launch OR token) lang:en -filter:retweets"
+hashtags = ["#Backpack", "#BackpackExchange"]
+category = "crypto"
+
+[[topics]]
+event_id = 254944
+name = "surf_fdv"
+description = "Surf FDV above ___ one day after launch?"
+markets = [
+    { name = "$50M", id = 1535113 },
+    { name = "$100M", id = 1535114 },
+    { name = "$200M", id = 1535115 },
+    { name = "$300M", id = 1535116 },
+    { name = "$500M", id = 1535117 }
+]
+query = "(surf OR @SurfAI OR surf protocol) (FDV OR valuation OR market cap OR launch OR token) lang:en -filter:retweets"
+hashtags = ["#Surf", "#SurfAI"]
+category = "crypto"
+
+[[topics]]
+event_id = 34038
+name = "hungary_pm"
+description = "Next Prime Minister of Hungary"
+markets = [
+    { name = "Viktor Orbán", id = 567560 },
+    { name = "Péter Magyar", id = 567561 },
+    { name = "Klára Dobrev", id = 567562 },
+    { name = "László Toroczkai", id = 567563 },
+    { name = "István Kapitány", id = 567564 },
+    { name = "János Lázár", id = 567565 }
+]
+query = "(Hungary OR Hungarian) (election OR prime minister OR Orbán OR Magyar OR Dobrev OR Toroczkai OR Kapitány OR Lázár OR Fidesz OR TISZA) lang:en -filter:retweets"
+hashtags = ["#Hungary", "#HungaryElection", "#Orban", "#Magyar"]
+category = "politics"
+
+[[topics]]
+event_id = 73096
+name = "iran_hormuz"
+description = "Will Iran close the Strait of Hormuz by...?"
+markets = [
+    { name = "March 31", id = 1227361 },
+    { name = "June 30", id = 1227362 },
+    { name = "December 31", id = 665307 }
+]
+query = "(Iran OR Iranian) (Hormuz OR strait) (close OR block OR blockade OR shut) lang:en -filter:retweets"
+hashtags = ["#Iran", "#Hormuz", "#StraitOfHormuz", "#MiddleEast"]
+category = "politics"
+
+[[topics]]
 event_id = 16167
 name = "mstr_sell_btc"
 description = "MicroStrategy sells any Bitcoin by ___?"
@@ -345,6 +432,43 @@ query = "(IPO OR \"going public\" OR \"public offering\") (Discord OR Stripe OR 
 hashtags = ["#IPO", "#GoingPublic", "#StockMarket"]
 category = "finance"
 
+[[topics]]
+event_id = 31875
+name = "rep_nominee_2028"
+description = "Republican Presidential Nominee 2028"
+markets = [
+    { name = "J.D. Vance", id = 561974 },
+    { name = "Marco Rubio", id = 561975 },
+    { name = "Tulsi Gabbard", id = 561976 },
+    { name = "Glenn Youngkin", id = 561977 },
+    { name = "Donald Trump Jr.", id = 561978 },
+    { name = "Donald Trump", id = 561973 },
+    { name = "Rand Paul", id = 562000 },
+    { name = "Kim Kardashian", id = 562003 }
+]
+query = "(republican OR GOP) (2028 OR nominee OR presidential OR primary) (Vance OR Rubio OR Gabbard OR Youngkin OR \"Trump Jr\" OR \"Donald Trump\" OR \"Rand Paul\" OR Kardashian) lang:en -filter:retweets"
+hashtags = ["#Republicans", "#GOP", "#2028Election", "#RepublicanPrimary"]
+category = "politics"
+
+[[topics]]
+event_id = 45915
+name = "brazil_president_2026"
+description = "Brazil Presidential Election 2026"
+markets = [
+    { name = "Tarcisio de Freitas", id = 601818 },
+    { name = "Luiz Inácio Lula da Silva", id = 601819 },
+    { name = "Jair Bolsonaro", id = 601820 },
+    { name = "Fernando Haddad", id = 601821 },
+    { name = "Michelle Bolsonaro", id = 601822 },
+    { name = "Eduardo Bolsonaro", id = 601823 },
+    { name = "Ratinho Júnior", id = 601824 },
+    { name = "Renan Santos", id = 601825 },
+    { name = "Flávio Bolsonaro", id = 601826 }
+]
+query = "(Brazil OR Brazilian) (election OR presidente OR presidential) (2026 OR Lula OR Bolsonaro OR Tarcisio OR Haddad OR Flavio) lang:en -filter:retweets"
+hashtags = ["#Brazil", "#BrazilElection", "#Lula", "#Bolsonaro"]
+category = "politics"
+
 [trust_weights]
 # Trust weights for different interaction types
 follow = 30
@@ -352,4 +476,3 @@ mention = 30
 reply = 20
 retweet = 50
 quote = 40
-post = 100

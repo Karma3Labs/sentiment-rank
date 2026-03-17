@@ -47,7 +47,7 @@ Rate the relevancy of this post to the topic on a scale from 0.0 to 1.0:
 Respond with ONLY a single decimal number between 0.0 and 1.0, nothing else."""
 
 
-def score_relevancy_openai(post: dict, topic: dict, api_key: str) -> float:
+def score_relevancy_openai(post: dict, topic: dict, api_key: str) -> float | None:
     prompt = build_prompt(post, topic)
     messages = [{"role": "user", "content": []}]
     messages[0]["content"].append({"type": "text", "text": prompt})
@@ -60,38 +60,42 @@ def score_relevancy_openai(post: dict, topic: dict, api_key: str) -> float:
                 "image_url": {"url": url}
             })
 
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": messages,
-                "max_tokens": 10,
-                "temperature": 0
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-        score_text = result["choices"][0]["message"]["content"].strip()
-        return float(score_text)
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            print(f"OpenAI rate limited, waiting 60s...")
-            time.sleep(60)
-            return score_relevancy_openai(post, topic, api_key)
-        print(f"OpenAI error scoring post {post.get('id')}: {e}")
-        return 0.0
-    except Exception as e:
-        print(f"OpenAI error scoring post {post.get('id')}: {e}")
-        return 0.0
+    while True:
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": messages,
+                    "max_tokens": 10,
+                    "temperature": 0
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            score_text = result["choices"][0]["message"]["content"].strip()
+            score = float(score_text)
+            if 0.0 <= score <= 1.0:
+                return score
+            print(f"OpenAI returned invalid score {score}, retrying...")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print(f"OpenAI rate limited, waiting 60s...")
+                time.sleep(60)
+                continue
+            print(f"OpenAI error scoring post {post.get('id')}: {e}, retrying...")
+        except ValueError:
+            print(f"OpenAI returned invalid format, retrying...")
+        except Exception as e:
+            print(f"OpenAI error scoring post {post.get('id')}: {e}, retrying...")
 
 
-def score_relevancy_claude(post: dict, topic: dict, api_key: str) -> float:
+def score_relevancy_claude(post: dict, topic: dict, api_key: str) -> float | None:
     prompt = build_prompt(post, topic)
     content = [{"type": "text", "text": prompt}]
 
@@ -103,35 +107,39 @@ def score_relevancy_claude(post: dict, topic: dict, api_key: str) -> float:
                 "source": {"type": "url", "url": url}
             })
 
-    try:
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 10,
-                "messages": [{"role": "user", "content": content}]
-            },
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-        score_text = result["content"][0]["text"].strip()
-        return float(score_text)
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            print(f"Claude rate limited, waiting 60s...")
-            time.sleep(60)
-            return score_relevancy_claude(post, topic, api_key)
-        print(f"Claude error scoring post {post.get('id')}: {e}")
-        return 0.0
-    except Exception as e:
-        print(f"Claude error scoring post {post.get('id')}: {e}")
-        return 0.0
+    while True:
+        try:
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": content}]
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            score_text = result["content"][0]["text"].strip()
+            score = float(score_text)
+            if 0.0 <= score <= 1.0:
+                return score
+            print(f"Claude returned invalid score {score}, retrying...")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print(f"Claude rate limited, waiting 60s...")
+                time.sleep(60)
+                continue
+            print(f"Claude error scoring post {post.get('id')}: {e}, retrying...")
+        except ValueError:
+            print(f"Claude returned invalid format, retrying...")
+        except Exception as e:
+            print(f"Claude error scoring post {post.get('id')}: {e}, retrying...")
 
 
 def score_relevancy(post: dict, topic: dict, openai_key: str, claude_key: str) -> float:

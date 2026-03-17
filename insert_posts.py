@@ -38,9 +38,10 @@ def main():
         events[name] = event_id
         event_markets[event_id] = parse_market_ids(markets)
 
-    run_id = 1
-
     for topic_name, event_id in events.items():
+        cur.execute("SELECT COALESCE(MAX(run_id), 0) FROM twitter_sentiment.posts WHERE event_id = %s", (event_id,))
+        run_id = cur.fetchone()[0] + 1
+        print(f"Using run_id {run_id} for {topic_name}")
         base_path = f"raw/{topic_name}"
 
         if not os.path.exists(f"{base_path}.json"):
