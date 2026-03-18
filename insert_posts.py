@@ -71,9 +71,14 @@ def main():
                     weights[w["post_id"]] = w["weight"]
 
         count = 0
+        skipped = 0
         for post in posts:
             post_id = post["id"]
-            author = post["author"]
+            author = post.get("author") or {}
+
+            if not author.get("id"):
+                skipped += 1
+                continue
 
             cur.execute(
                 """
@@ -110,7 +115,7 @@ def main():
             )
             count += 1
 
-        print(f"Inserted {count} posts for {topic_name}")
+        print(f"Inserted {count} posts for {topic_name} (skipped {skipped} with missing author)")
 
     conn.commit()
     cur.close()

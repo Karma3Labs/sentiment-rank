@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sys
-import tomllib
+import json
+import glob
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
@@ -9,10 +10,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def load_config():
-    config_path = Path(__file__).parent / "config.toml"
-    with open(config_path, "rb") as f:
-        return tomllib.load(f)
+def load_topics_from_raw() -> list[dict]:
+    raw_dir = Path(__file__).parent / "raw"
+    topic_files = glob.glob(str(raw_dir / "*_topics.json"))
+
+    topics = []
+    for topic_file in topic_files:
+        category = os.path.basename(topic_file).replace("_topics.json", "")
+        with open(topic_file, "r") as f:
+            for topic in json.load(f):
+                topic["category"] = category
+                topics.append(topic)
+
+    return topics
 
 
 def run_step(step_num: int, total_steps: int, description: str, script: str, args: list[str]):
@@ -24,18 +34,18 @@ def run_step(step_num: int, total_steps: int, description: str, script: str, arg
     return True
 
 
-def run_topic(topic_name: str) -> bool:
+def run_topic(topic_slug: str) -> bool:
     print(f"\n{'=' * 40}")
-    print(f"Running pipeline for topic: {topic_name}")
+    print(f"Running pipeline for topic: {topic_slug}")
     print('=' * 40)
 
     raw_dir = Path(__file__).parent / "raw"
 
     steps = [
-        ("Searching tweets", "search_tweets.py", [topic_name], f"{topic_name}.json"),
-        ("Predicting relevancy", "predict_relevancy.py", [topic_name], f"{topic_name}_relevancy.json"),
-        ("Predicting sentiment", "predict_sentiment.py", [topic_name], f"{topic_name}_prediction.json"),
-        ("Weighting posts", "weight_posts.py", [topic_name], f"{topic_name}_weighted.json"),
+        ("Searching tweets", "search_tweets.py", [topic_slug], f"{topic_slug}.json"),
+        ("Predicting relevancy", "predict_relevancy.py", [topic_slug], f"{topic_slug}_relevancy.json"),
+        ("Predicting sentiment", "predict_sentiment.py", [topic_slug], f"{topic_slug}_prediction.json"),
+        ("Weighting posts", "weight_posts.py", [topic_slug], f"{topic_slug}_weighted.json"),
     ]
 
     for i, (desc, script, args, output_file) in enumerate(steps, 1):
@@ -46,30 +56,30 @@ def run_topic(topic_name: str) -> bool:
             return False
 
     print(f"\n{'=' * 40}")
-    print(f"Pipeline complete for topic: {topic_name}")
+    print(f"Pipeline complete for topic: {topic_slug}")
     print('=' * 40)
     return True
 
 
 def main():
-    config = load_config()
-    topics = [t["name"] for t in config.get("topics", [])]
+    topics = load_topics_from_raw()
+    topic_slugs = [t["slug"] for t in topics]
 
-    if not topics:
-        print("No topics found in config.toml")
+    if not topic_slugs:
+        print("No topics found in raw/*_topics.json")
         return 1
 
-    print(f"Found {len(topics)} topics")
+    print(f"Found {len(topic_slugs)} topics")
 
     failed = []
-    for i, topic_name in enumerate(topics, 1):
+    for i, topic_slug in enumerate(topic_slugs, 1):
         print(f"\n\n{'#' * 50}")
-        print(f"# Topic {i}/{len(topics)}: {topic_name}")
+        print(f"# Topic {i}/{len(topic_slugs)}: {topic_slug}")
         print('#' * 50)
 
-        if not run_topic(topic_name):
-            failed.append(topic_name)
-            print(f"Topic {topic_name} failed, continuing...")
+        if not run_topic(topic_slug):
+            failed.append(topic_slug)
+            print(f"Topic {topic_slug} failed, continuing...")
 
     print("\n[Final] Inserting topics...")
     subprocess.run([sys.executable, "insert_topics.py"], cwd=Path(__file__).parent)
@@ -79,7 +89,7 @@ def main():
 
     print(f"\n{'=' * 50}")
     print("All topics processed")
-    print(f"Succeeded: {len(topics) - len(failed)}/{len(topics)}")
+    print(f"Succeeded: {len(topic_slugs) - len(failed)}/{len(topic_slugs)}")
     if failed:
         print(f"Failed: {failed}")
     print('=' * 50)

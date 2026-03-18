@@ -104,12 +104,12 @@ def build_trust_arcs(results: dict, followings: dict, weights: dict, username_to
     return trust
 
 
-def save_seed_csv(seed_peers: list, username_to_id: dict, seed_dir: Path, category: str):
+def save_seed_csv(categories: list, username_to_id: dict, seed_dir: Path, category: str):
     seed_dir.mkdir(parents=True, exist_ok=True)
     output_path = seed_dir / f"{category}.csv"
 
     seed_ids = []
-    for peer in seed_peers:
+    for peer in categories:
         username = peer.lstrip("@").lower()
         user_id = username_to_id.get(username)
         if user_id:
@@ -150,7 +150,7 @@ def main():
     config = load_config()
     weights = config.get("trust_weights", {})
 
-    seed_peers = config.get("seed_peers", {}).get(category, [])
+    categories_list = config.get("categories", {}).get(category, [])
 
     raw_dir = Path(__file__).parent / "raw"
     trust_dir = Path(__file__).parent / "trust"
@@ -173,7 +173,7 @@ def main():
     print(f"Built {len(trust)} unique arcs")
 
     save_trust_csv(trust, trust_dir, category)
-    save_seed_csv(seed_peers, username_to_id, seed_dir, category)
+    save_seed_csv(categories_list, username_to_id, seed_dir, category)
 
 
 if __name__ == "__main__":

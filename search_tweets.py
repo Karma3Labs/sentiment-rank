@@ -1,4 +1,6 @@
 import os
+import json
+import glob
 import tomllib
 import requests
 from datetime import datetime
@@ -152,18 +154,23 @@ def search_tweets(
     return response.json()
 
 
-def process_tweet(tweet: dict, api_key: str, max_replies: int, max_quotes: int, max_retweeters: int, max_pages: int) -> dict:
+def process_tweet(tweet: dict, api_key: str, max_replies: int, max_quotes: int, max_retweeters: int, max_pages: int, fetch_interactions: bool = False) -> dict:
     normalized = normalize_tweet(tweet)
     tweet_id = normalized["id"]
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        replies_future = executor.submit(get_tweet_replies, tweet_id, api_key, max_replies, max_pages)
-        quotes_future = executor.submit(get_tweet_quotes, tweet_id, api_key, max_quotes, max_pages)
-        retweeters_future = executor.submit(get_tweet_retweeters, tweet_id, api_key, max_retweeters, max_pages)
+    if fetch_interactions:
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            replies_future = executor.submit(get_tweet_replies, tweet_id, api_key, max_replies, max_pages)
+            quotes_future = executor.submit(get_tweet_quotes, tweet_id, api_key, max_quotes, max_pages)
+            retweeters_future = executor.submit(get_tweet_retweeters, tweet_id, api_key, max_retweeters, max_pages)
 
-        normalized["replies"] = replies_future.result()
-        normalized["quotes"] = quotes_future.result()
-        normalized["retweeters"] = retweeters_future.result()
+            normalized["replies"] = replies_future.result()
+            normalized["quotes"] = quotes_future.result()
+            normalized["retweeters"] = retweeters_future.result()
+    else:
+        normalized["replies"] = []
+        normalized["quotes"] = []
+        normalized["retweeters"] = []
 
     return normalized
 
@@ -176,6 +183,7 @@ def search_all_tweets(
     max_tweets: int | None = None,
     fetch_limits: dict | None = None,
     parallel_requests: int = 100,
+    fetch_interactions: bool = False,
 ) -> list[dict]:
     limits = fetch_limits or {}
     max_replies = limits.get("max_replies", 250)
@@ -218,7 +226,7 @@ def search_all_tweets(
 
     with ThreadPoolExecutor(max_workers=parallel_requests) as executor:
         futures = {
-            executor.submit(process_tweet, tweet, api_key, max_replies, max_quotes, max_retweeters, sub_max_pages): i
+            executor.submit(process_tweet, tweet, api_key, max_replies, max_quotes, max_retweeters, sub_max_pages, fetch_interactions): i
             for i, tweet in enumerate(all_tweets)
         }
 
@@ -235,39 +243,57 @@ def search_all_tweets(
     return [r[1] for r in results]
 
 
-def get_topic(config: dict, topic_name: str) -> dict | None:
-    for topic in config.get("topics", []):
-        if topic.get("name") == topic_name:
+def load_topics_from_raw() -> list[dict]:
+    raw_dir = Path("raw")
+    topic_files = glob.glob(str(raw_dir / "*_topics.json"))
+
+    topics = []
+    for topic_file in topic_files:
+        category = os.path.basename(topic_file).replace("_topics.json", "")
+        with open(topic_file, "r") as f:
+            for topic in json.load(f):
+                topic["category"] = category
+                topics.append(topic)
+
+    return topics
+
+
+def get_topic(topic_slug: str) -> dict | None:
+    topics = load_topics_from_raw()
+    for topic in topics:
+        if topic.get("slug") == topic_slug:
             return topic
     return None
 
 
-def list_topics(config: dict) -> list[str]:
-    return [topic["name"] for topic in config.get("topics", [])]
+def list_topics() -> list[str]:
+    topics = load_topics_from_raw()
+    return [topic["slug"] for topic in topics]
 
 
 def search_topic(
-    topic_name: str,
+    topic_slug: str,
     config: dict,
     api_key: str,
     max_pages: int | None = None,
 ) -> list[dict]:
-    topic = get_topic(config, topic_name)
+    topic = get_topic(topic_slug)
     if not topic:
-        available = list_topics(config)
-        raise ValueError(f"Topic '{topic_name}' not found. Available: {available}")
+        available = list_topics()
+        raise ValueError(f"Topic '{topic_slug}' not found. Available: {available}")
 
     query = topic["query"]
     search_config = config.get("search", {})
     query_type = search_config.get("query_type", "Top")
     max_tweets = search_config.get("max_tweets", 100)
     fetch_limits = config.get("fetch_limits", {})
+    fetch_interactions = search_config.get("fetch_interactions", False)
 
     if max_pages is None:
         max_pages = search_config.get("max_pages")
 
     parallel_requests = search_config.get("parallel_requests", 10)
-    tweets = search_all_tweets(query, api_key, query_type, max_pages, max_tweets, fetch_limits, parallel_requests)
+    tweets = search_all_tweets(query, api_key, query_type, max_pages, max_tweets, fetch_limits, parallel_requests, fetch_interactions)
     return tweets
 
 
@@ -276,7 +302,7 @@ def main():
     import json
 
     parser = argparse.ArgumentParser(description="Search tweets using TwitterAPI.io")
-    parser.add_argument("topic", nargs="?", help="Topic name from config.toml")
+    parser.add_argument("topic", nargs="?", help="Topic slug from raw/*_topics.json")
     parser.add_argument("--config", default="config.toml", help="Path to config file")
     parser.add_argument("--max-pages", type=int, help="Maximum number of pages to fetch")
     parser.add_argument("--list", action="store_true", help="List available topics")
@@ -286,8 +312,8 @@ def main():
 
     if args.list:
         print("Available topics:")
-        for topic in config.get("topics", []):
-            print(f"  {topic['name']}: {topic.get('description', '')}")
+        for topic in load_topics_from_raw():
+            print(f"  {topic['slug']}: {topic.get('description', '')}")
         return 0
 
     if not args.topic:

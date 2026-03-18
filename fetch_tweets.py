@@ -237,8 +237,8 @@ def main():
     parallel_requests = look_back.get("parallel_requests", 100)
     max_tweets = look_back.get("max_tweets", 100)
 
-    seed_peers = config.get("seed_peers", {}).get(category, [])
-    seed_usernames = [p.lstrip("@") for p in seed_peers]
+    categories_list = config.get("categories", {}).get(category, [])
+    seed_usernames = [p.lstrip("@") for p in categories_list]
 
     all_users = [u for u in seed_usernames if u]
     total = len(all_users)

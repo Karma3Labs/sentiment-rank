@@ -1,11 +1,10 @@
 import os
 import sys
 import json
-import tomllib
-import base64
+import glob
 import requests
 import time
-import glob
+import math
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -13,172 +12,125 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def load_config():
-    config_path = Path(__file__).parent / "config.toml"
-    with open(config_path, "rb") as f:
-        return tomllib.load(f)
+def load_topics_from_raw() -> list[dict]:
+    raw_dir = Path(__file__).parent / "raw"
+    topic_files = glob.glob(str(raw_dir / "*_topics.json"))
+
+    topics = []
+    for topic_file in topic_files:
+        category = os.path.basename(topic_file).replace("_topics.json", "")
+        with open(topic_file, "r") as f:
+            for topic in json.load(f):
+                topic["category"] = category
+                topics.append(topic)
+
+    return topics
 
 
-def get_topic_by_name(config: dict, topic_name: str) -> dict | None:
-    for topic in config.get("topics", []):
-        if topic.get("name") == topic_name:
+def get_topic_by_slug(topic_slug: str) -> dict | None:
+    topics = load_topics_from_raw()
+    for topic in topics:
+        if topic.get("slug") == topic_slug:
             return topic
     return None
 
 
-def build_prompt(post: dict, topic: dict) -> str:
-    topic_name = topic.get("name", "")
-    topic_description = topic.get("description", "")
-
-    return f"""You are evaluating if a social media post is relevant to a specific topic.
-
-Topic: {topic_name}
-Topic Description: {topic_description}
-
-Post text: {post.get("text", "")}
-
-Rate the relevancy of this post to the topic on a scale from 0.0 to 1.0:
-- 1.0: Highly relevant, directly discusses the topic with specific predictions or analysis
-- 0.7-0.9: Relevant, discusses the topic but may lack specific details
-- 0.4-0.6: Somewhat relevant, tangentially related to the topic
-- 0.1-0.3: Barely relevant, mentions related keywords but not the actual topic
-- 0.0: Not relevant at all
-
-Respond with ONLY a single decimal number between 0.0 and 1.0, nothing else."""
-
-
-def score_relevancy_openai(post: dict, topic: dict, api_key: str) -> float | None:
-    prompt = build_prompt(post, topic)
-    messages = [{"role": "user", "content": []}]
-    messages[0]["content"].append({"type": "text", "text": prompt})
-
-    media_urls = post.get("mediaUrls", [])
-    for url in media_urls[:4]:
-        if url and any(ext in url.lower() for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
-            messages[0]["content"].append({
-                "type": "image_url",
-                "image_url": {"url": url}
-            })
-
-    while True:
+def get_embeddings(texts: list[str], api_key: str, max_retries: int = 3) -> list[list[float]]:
+    retries = 0
+    while retries < max_retries:
         try:
             response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
+                "https://api.openai.com/v1/embeddings",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "gpt-4o-mini",
-                    "messages": messages,
-                    "max_tokens": 10,
-                    "temperature": 0
+                    "model": "text-embedding-3-large",
+                    "input": texts
                 },
-                timeout=30
+                timeout=60
             )
             response.raise_for_status()
             result = response.json()
-            score_text = result["choices"][0]["message"]["content"].strip()
-            score = float(score_text)
-            if 0.0 <= score <= 1.0:
-                return score
-            print(f"OpenAI returned invalid score {score}, retrying...")
+            embeddings = [None] * len(texts)
+            for item in result["data"]:
+                embeddings[item["index"]] = item["embedding"]
+            return embeddings
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
-                print(f"OpenAI rate limited, waiting 60s...")
+                print(f"Rate limited, waiting 60s...")
                 time.sleep(60)
                 continue
-            print(f"OpenAI error scoring post {post.get('id')}: {e}, retrying...")
-        except ValueError:
-            print(f"OpenAI returned invalid format, retrying...")
+            print(f"Error getting embeddings: {e}, retrying...")
+            retries += 1
         except Exception as e:
-            print(f"OpenAI error scoring post {post.get('id')}: {e}, retrying...")
+            print(f"Error getting embeddings: {e}, retrying...")
+            retries += 1
+    return []
 
 
-def score_relevancy_claude(post: dict, topic: dict, api_key: str) -> float | None:
-    prompt = build_prompt(post, topic)
-    content = [{"type": "text", "text": prompt}]
-
-    media_urls = post.get("mediaUrls", [])
-    for url in media_urls[:4]:
-        if url and any(ext in url.lower() for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
-            content.append({
-                "type": "image",
-                "source": {"type": "url", "url": url}
-            })
-
-    while True:
-        try:
-            response = requests.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 10,
-                    "messages": [{"role": "user", "content": content}]
-                },
-                timeout=30
-            )
-            response.raise_for_status()
-            result = response.json()
-            score_text = result["content"][0]["text"].strip()
-            score = float(score_text)
-            if 0.0 <= score <= 1.0:
-                return score
-            print(f"Claude returned invalid score {score}, retrying...")
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429:
-                print(f"Claude rate limited, waiting 60s...")
-                time.sleep(60)
-                continue
-            print(f"Claude error scoring post {post.get('id')}: {e}, retrying...")
-        except ValueError:
-            print(f"Claude returned invalid format, retrying...")
-        except Exception as e:
-            print(f"Claude error scoring post {post.get('id')}: {e}, retrying...")
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot_product = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot_product / (norm_a * norm_b)
 
 
-def score_relevancy(post: dict, topic: dict, openai_key: str, claude_key: str) -> float:
-    openai_score = score_relevancy_openai(post, topic, openai_key)
-    claude_score = score_relevancy_claude(post, topic, claude_key)
-    return (openai_score + claude_score) / 2
+def score_relevancy_batch(posts: list[dict], topic: dict, api_key: str, batch_size: int = 2000) -> list[dict]:
+    topic_text = f"{topic.get('description', '')} {topic.get('slug', '')}"
+    post_texts = [post.get("text", "")[:8000] for post in posts]
 
+    all_texts = [topic_text] + post_texts
 
-def process_post(post: dict, topic: dict, openai_key: str, claude_key: str, index: int, total: int) -> dict:
-    score = score_relevancy(post, topic, openai_key, claude_key)
-    print(f"[{index}/{total}] Post {post.get('id')}: {score:.2f}")
-    return {"post_id": post.get("id"), "relevancy_score": score}
+    all_embeddings = []
+    for i in range(0, len(all_texts), batch_size):
+        batch = all_texts[i:i + batch_size]
+        print(f"  Getting embeddings for batch {i // batch_size + 1}/{math.ceil(len(all_texts) / batch_size)}...")
+        embeddings = get_embeddings(batch, api_key)
+        if not embeddings:
+            print(f"  Failed to get embeddings for batch, using zeros")
+            embeddings = [[0.0] * 3072] * len(batch)
+        all_embeddings.extend(embeddings)
+
+    topic_embedding = all_embeddings[0]
+    post_embeddings = all_embeddings[1:]
+
+    results = []
+    for i, post in enumerate(posts):
+        similarity = cosine_similarity(topic_embedding, post_embeddings[i])
+        score = max(0.0, min(1.0, similarity))
+        results.append({
+            "post_id": post.get("id"),
+            "relevancy_score": score
+        })
+        print(f"[{i + 1}/{len(posts)}] Post {post.get('id')}: {score:.2f}")
+
+    return results
 
 
 def main():
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if not openai_key:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
 
-    claude_key = os.environ.get("CLAUDE_API_KEY")
-    if not claude_key:
-        raise ValueError("CLAUDE_API_KEY environment variable not set")
-
     if len(sys.argv) < 2:
-        print("Usage: python assign_relevancy.py <topic_name>")
-        print("Example: python assign_relevancy.py btc_price_prediction")
+        print("Usage: python predict_relevancy.py <topic_slug>")
+        print("Example: python predict_relevancy.py what-price-will-bitcoin-hit-in-march-2026")
         sys.exit(1)
 
-    topic_name = sys.argv[1]
-    config = load_config()
-    topic = get_topic_by_name(config, topic_name)
+    topic_slug = sys.argv[1]
+    topic = get_topic_by_slug(topic_slug)
     if not topic:
-        print(f"Topic '{topic_name}' not found in config.toml")
+        print(f"Topic '{topic_slug}' not found in raw/*_topics.json")
         sys.exit(1)
 
     raw_dir = Path(__file__).parent / "raw"
-    pattern = str(raw_dir / f"{topic_name}*.json")
+    pattern = str(raw_dir / f"{topic_slug}*.json")
     input_files = sorted(glob.glob(pattern))
-    input_files = [f for f in input_files if f.endswith(f"{topic_name}.json")]
+    input_files = [f for f in input_files if f.endswith(f"{topic_slug}.json")]
 
     if not input_files:
         print(f"No files found matching: {pattern}")
@@ -195,18 +147,14 @@ def main():
     total = len(posts)
     start_time = datetime.now()
     print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Topic: {topic_name}")
+    print(f"Topic: {topic_slug}")
     print(f"Description: {topic.get('description')}")
     print(f"Total posts: {total}")
-    results = []
 
-    for i, post in enumerate(posts, 1):
-        result = process_post(post, topic, openai_key, claude_key, i, total)
-        results.append(result)
-
+    results = score_relevancy_batch(posts, topic, api_key)
     results.sort(key=lambda x: x.get("relevancy_score", 0), reverse=True)
 
-    output_path = raw_dir / f"{topic_name}_relevancy.json"
+    output_path = raw_dir / f"{topic_slug}_relevancy.json"
 
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
