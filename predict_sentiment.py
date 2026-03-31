@@ -40,37 +40,30 @@ def get_outcomes_from_markets(topic: dict) -> list[str]:
     return [m["name"] for m in markets]
 
 
-def build_batch_prompt(posts: list[dict], topic: dict) -> str:
+def build_prompt(post: dict, topic: dict) -> str:
     topic_description = topic.get("description", "")
     outcomes = get_outcomes_from_markets(topic)
     outcomes_str = ", ".join(f'"{o}"' for o in outcomes)
 
-    posts_text = ""
-    for i, post in enumerate(posts):
-        posts_text += f"\nPost {i + 1}: {post.get('text', '')}\n"
-
-    return f"""You are analyzing social media posts to predict which outcome each supports.
+    return f"""You are analyzing a social media post to predict which outcome it supports.
 
 Question: {topic_description}
 Possible outcomes: [{outcomes_str}]
 
-{posts_text}
+Post text: {post.get("text", "")}
 
-For each post, estimate the probability distribution across the possible outcomes.
-Each probability array must sum to 1.0.
+Based on this post, estimate the probability distribution across the possible outcomes.
+The probabilities must sum to 1.0.
 
-Respond with ONLY a JSON array of arrays, one probability array per post in order.
-For example, if there are 2 posts and outcomes are ["yes", "no"]:
-[[0.8, 0.2], [0.3, 0.7]]
+Respond with ONLY a JSON array of numbers representing the probability for each outcome in order.
+For example, if outcomes are ["yes", "no"] and the post strongly suggests "yes", respond: [0.8, 0.2]
 
 Response:"""
 
 
-def predict_batch_openai(posts: list[dict], topic: dict, api_key: str, max_retries: int = 3) -> list[list[float] | None]:
-    prompt = build_batch_prompt(posts, topic)
+def predict_openai(post: dict, topic: dict, api_key: str, max_retries: int = 3) -> list[float] | None:
+    prompt = build_prompt(post, topic)
     outcomes = get_outcomes_from_markets(topic)
-    num_outcomes = len(outcomes)
-    num_posts = len(posts)
     retries = 0
 
     while retries < max_retries:
@@ -84,35 +77,22 @@ def predict_batch_openai(posts: list[dict], topic: dict, api_key: str, max_retri
                 json={
                     "model": "gpt-4o",
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 500,
+                    "max_tokens": 200,
                     "temperature": 0
                 },
-                timeout=60
+                timeout=30
             )
             response.raise_for_status()
             result = response.json()
             text = result["choices"][0]["message"]["content"].strip()
             try:
-                all_probs = json.loads(text)
+                probs = json.loads(text)
             except json.JSONDecodeError:
                 print(f"OpenAI returned invalid JSON, retrying...")
                 retries += 1
                 continue
-
-            if not isinstance(all_probs, list) or len(all_probs) != num_posts:
-                print(f"OpenAI returned wrong number of predictions, retrying...")
-                retries += 1
-                continue
-
-            valid = True
-            for probs in all_probs:
-                if not isinstance(probs, list) or len(probs) != num_outcomes or abs(sum(probs) - 1.0) >= 0.01:
-                    valid = False
-                    break
-
-            if valid:
-                return all_probs
-
+            if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
+                return probs
             print(f"OpenAI returned invalid probs, retrying...")
             retries += 1
         except requests.exceptions.HTTPError as e:
@@ -120,20 +100,17 @@ def predict_batch_openai(posts: list[dict], topic: dict, api_key: str, max_retri
                 print(f"OpenAI rate limited, waiting 60s...")
                 time.sleep(60)
                 continue
-            print(f"OpenAI error: {e}, retrying...")
+            print(f"OpenAI error for post {post.get('id')}: {e}, retrying...")
             retries += 1
         except Exception as e:
-            print(f"OpenAI error: {e}, retrying...")
+            print(f"OpenAI error for post {post.get('id')}: {e}, retrying...")
             retries += 1
+    return None
 
-    return [None] * num_posts
 
-
-def predict_batch_claude(posts: list[dict], topic: dict, api_key: str, max_retries: int = 3) -> list[list[float] | None]:
-    prompt = build_batch_prompt(posts, topic)
+def predict_claude(post: dict, topic: dict, api_key: str, max_retries: int = 3) -> list[float] | None:
+    prompt = build_prompt(post, topic)
     outcomes = get_outcomes_from_markets(topic)
-    num_outcomes = len(outcomes)
-    num_posts = len(posts)
     retries = 0
 
     while retries < max_retries:
@@ -147,35 +124,22 @@ def predict_batch_claude(posts: list[dict], topic: dict, api_key: str, max_retri
                 },
                 json={
                     "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 500,
+                    "max_tokens": 200,
                     "messages": [{"role": "user", "content": prompt}]
                 },
-                timeout=60
+                timeout=30
             )
             response.raise_for_status()
             result = response.json()
             text = result["content"][0]["text"].strip()
             try:
-                all_probs = json.loads(text)
+                probs = json.loads(text)
             except json.JSONDecodeError:
                 print(f"Claude returned invalid JSON, retrying...")
                 retries += 1
                 continue
-
-            if not isinstance(all_probs, list) or len(all_probs) != num_posts:
-                print(f"Claude returned wrong number of predictions, retrying...")
-                retries += 1
-                continue
-
-            valid = True
-            for probs in all_probs:
-                if not isinstance(probs, list) or len(probs) != num_outcomes or abs(sum(probs) - 1.0) >= 0.01:
-                    valid = False
-                    break
-
-            if valid:
-                return all_probs
-
+            if len(probs) == len(outcomes) and abs(sum(probs) - 1.0) < 0.01:
+                return probs
             print(f"Claude returned invalid probs, retrying...")
             retries += 1
         except requests.exceptions.HTTPError as e:
@@ -183,43 +147,33 @@ def predict_batch_claude(posts: list[dict], topic: dict, api_key: str, max_retri
                 print(f"Claude rate limited, waiting 60s...")
                 time.sleep(60)
                 continue
-            print(f"Claude error: {e}, retrying...")
+            print(f"Claude error for post {post.get('id')}: {e}, retrying...")
             retries += 1
         except Exception as e:
-            print(f"Claude error: {e}, retrying...")
+            print(f"Claude error for post {post.get('id')}: {e}, retrying...")
             retries += 1
+    return None
 
-    return [None] * num_posts
 
+def predict_single(post: dict, topic: dict, openai_key: str, claude_key: str) -> dict:
+    openai_probs = predict_openai(post, topic, openai_key)
+    claude_probs = predict_claude(post, topic, claude_key)
 
-def predict_batch(posts: list[dict], topic: dict, openai_key: str, claude_key: str, batch_idx: int) -> list[dict]:
-    openai_results = predict_batch_openai(posts, topic, openai_key)
-    claude_results = predict_batch_claude(posts, topic, claude_key)
+    if openai_probs and claude_probs:
+        probs = [(o + c) / 2 for o, c in zip(openai_probs, claude_probs)]
+    elif openai_probs:
+        probs = openai_probs
+    elif claude_probs:
+        probs = claude_probs
+    else:
+        outcomes = get_outcomes_from_markets(topic)
+        probs = [1.0 / len(outcomes)] * len(outcomes)
+        print(f"Both providers failed for post {post.get('id')}, using uniform distribution")
 
-    outcomes = get_outcomes_from_markets(topic)
-    uniform = [1.0 / len(outcomes)] * len(outcomes)
-
-    results = []
-    for i, post in enumerate(posts):
-        openai_probs = openai_results[i]
-        claude_probs = claude_results[i]
-
-        if openai_probs and claude_probs:
-            probs = [(o + c) / 2 for o, c in zip(openai_probs, claude_probs)]
-        elif openai_probs:
-            probs = openai_probs
-        elif claude_probs:
-            probs = claude_probs
-        else:
-            probs = uniform
-            print(f"  Batch {batch_idx}: Both providers failed for post {post.get('id')}, using uniform")
-
-        results.append({
-            "post_id": post.get("id"),
-            "probabilities": probs
-        })
-
-    return results
+    return {
+        "post_id": post.get("id"),
+        "probabilities": probs
+    }
 
 
 def main():
@@ -256,44 +210,42 @@ def main():
 
     print(f"Loading {posts_path}...")
     with open(posts_path, "r") as f:
-        posts = json.load(f)
+        all_posts = json.load(f)
 
     print(f"Loading {relevancy_path}...")
     with open(relevancy_path, "r") as f:
-        relevancy = json.load(f)
+        relevancy_data = json.load(f)
 
-    relevancy_map = {r["post_id"]: r["relevancy_score"] for r in relevancy}
-    relevant_posts = [p for p in posts if relevancy_map.get(p.get("id"), 0) > 0.5]
-    total = len(relevant_posts)
+    relevancy_map = {r["post_id"]: r["relevancy_score"] for r in relevancy_data}
+    posts = [p for p in all_posts if relevancy_map.get(p.get("id"), 0) > 0.5]
+
+    total = len(posts)
+    print(f"Filtered to {total}/{len(all_posts)} posts with relevancy > 0.5")
 
     start_time = datetime.now()
     print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Topic: {topic_slug}")
     print(f"Description: {topic.get('description')}")
     print(f"Outcomes: {get_outcomes_from_markets(topic)}")
-    print(f"Total posts (score > 0.5): {total}")
+    print(f"Total posts: {total}")
 
-    batch_size = 3
-    batches = [relevant_posts[i:i + batch_size] for i in range(0, len(relevant_posts), batch_size)]
-    num_batches = len(batches)
-
-    print(f"Processing {num_batches} batches with 10 parallel workers...")
+    print(f"Processing with 10 parallel workers...")
 
     predictions = []
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
-            executor.submit(predict_batch, batch, topic, openai_key, claude_key, idx): idx
-            for idx, batch in enumerate(batches)
+            executor.submit(predict_single, post, topic, openai_key, claude_key): post
+            for post in posts
         }
 
         for future in as_completed(futures):
-            batch_idx = futures[future]
+            post = futures[future]
             try:
-                batch_results = future.result()
-                predictions.extend(batch_results)
-                print(f"[{len(predictions)}/{total}] Batch {batch_idx + 1}/{num_batches} complete")
+                result = future.result()
+                predictions.append(result)
+                print(f"[{len(predictions)}/{total}] Post {result['post_id']}: {result['probabilities']}")
             except Exception as e:
-                print(f"Batch {batch_idx} failed: {e}")
+                print(f"Error processing post {post.get('id')}: {e}")
 
     output_path = raw_dir / f"{topic_slug}_prediction.json"
 

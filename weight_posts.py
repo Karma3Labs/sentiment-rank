@@ -108,15 +108,8 @@ def main():
     posts = load_posts(raw_dir, topic_slug)
     print(f"Loaded {len(posts)} posts")
 
-    print("Loading relevancy scores...")
-    relevancy_map = load_relevancy(raw_dir, topic_slug)
-    print(f"Loaded {len(relevancy_map)} relevancy scores")
-
-    relevant_posts = [p for p in posts if relevancy_map.get(p.get("id"), 0) > 0.5]
-    print(f"Posts with score > 0.5: {len(relevant_posts)}")
-
     print("Weighting posts...")
-    weighted = weight_posts(relevant_posts, weights)
+    weighted = weight_posts(posts, weights)
 
     weighted.sort(key=lambda x: x["weight"], reverse=True)
 

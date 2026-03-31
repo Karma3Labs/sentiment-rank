@@ -1,16 +1,14 @@
 # Search settings
 [search]
 query_type = "Top"  # "Latest" or "Top"
-max_pages = 5  # Maximum pages to fetch per query
+max_pages = 10  # Maximum pages to fetch per query
 parallel_requests = 10
-max_tweets = 100
 fetch_interactions = false
-max_markets = 5
+max_markets = 8
 
 [look_back]
 year = 2026
 month = 1
-days = 30
 
 [fetch_limits]
 max_replies = 100

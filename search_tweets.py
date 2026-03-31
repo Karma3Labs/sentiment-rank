@@ -1,18 +1,16 @@
 import os
+import sys
 import json
 import glob
 import tomllib
 import requests
-from datetime import datetime
 from pathlib import Path
-from typing import Iterator
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from dotenv import load_dotenv
 
+load_dotenv()
 
 API_BASE_URL = "https://api.twitterapi.io/twitter/tweet/advanced_search"
-API_REPLIES_URL = "https://api.twitterapi.io/twitter/tweet/replies"
-API_QUOTES_URL = "https://api.twitterapi.io/twitter/tweet/quotes"
-API_RETWEETERS_URL = "https://api.twitterapi.io/twitter/tweet/retweeters"
 
 
 def normalize_author(author: dict) -> dict:
@@ -48,199 +46,9 @@ def normalize_tweet(tweet: dict) -> dict:
     }
 
 
-def get_tweet_replies(tweet_id: str, api_key: str, max_replies: int = 250, max_pages: int = 5) -> list[dict]:
-    headers = {"X-API-Key": api_key}
-    params = {"tweetId": tweet_id}
-    replies = []
-    cursor = ""
-    page_count = 0
-    while True:
-        page_count += 1
-        if cursor:
-            params["cursor"] = cursor
-        response = requests.get(API_REPLIES_URL, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
-        for tweet in data.get("tweets", []):
-            if tweet.get("id") != tweet_id:
-                replies.append(normalize_tweet(tweet))
-                if len(replies) >= max_replies:
-                    return replies
-        if page_count >= max_pages:
-            break
-        if not data.get("has_next_page"):
-            break
-        cursor = data.get("next_cursor", "")
-        if not cursor:
-            break
-    return replies
-
-
-def get_tweet_quotes(tweet_id: str, api_key: str, max_quotes: int = 250, max_pages: int = 5) -> list[dict]:
-    headers = {"X-API-Key": api_key}
-    params = {"tweetId": tweet_id}
-    quotes = []
-    cursor = ""
-    page_count = 0
-    while True:
-        page_count += 1
-        if cursor:
-            params["cursor"] = cursor
-        response = requests.get(API_QUOTES_URL, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
-        for quote in data.get("tweets", []):
-            quotes.append(normalize_tweet(quote))
-            if len(quotes) >= max_quotes:
-                return quotes
-        if page_count >= max_pages:
-            break
-        if not data.get("has_next_page"):
-            break
-        cursor = data.get("next_cursor", "")
-        if not cursor:
-            break
-    return quotes
-
-
-def get_tweet_retweeters(tweet_id: str, api_key: str, max_retweeters: int = 250, max_pages: int = 5) -> list[dict]:
-    headers = {"X-API-Key": api_key}
-    params = {"tweetId": tweet_id}
-    retweeters = []
-    cursor = ""
-    page_count = 0
-    while True:
-        page_count += 1
-        if cursor:
-            params["cursor"] = cursor
-        response = requests.get(API_RETWEETERS_URL, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
-        for user in data.get("users", []):
-            retweeters.append(normalize_author(user))
-            if len(retweeters) >= max_retweeters:
-                return retweeters
-        if page_count >= max_pages:
-            break
-        if not data.get("has_next_page"):
-            break
-        cursor = data.get("next_cursor", "")
-        if not cursor:
-            break
-    return retweeters
-
-
 def load_config(config_path: str = "config.toml") -> dict:
     with open(config_path, "rb") as f:
         return tomllib.load(f)
-
-
-def search_tweets(
-    query: str,
-    api_key: str,
-    query_type: str = "Latest",
-    cursor: str = "",
-) -> dict:
-    headers = {"X-API-Key": api_key}
-    params = {
-        "query": query,
-        "queryType": query_type,
-    }
-    if cursor:
-        params["cursor"] = cursor
-
-    response = requests.get(API_BASE_URL, headers=headers, params=params)
-    response.raise_for_status()
-    return response.json()
-
-
-def process_tweet(tweet: dict, api_key: str, max_replies: int, max_quotes: int, max_retweeters: int, max_pages: int, fetch_interactions: bool = False) -> dict:
-    normalized = normalize_tweet(tweet)
-    tweet_id = normalized["id"]
-
-    if fetch_interactions:
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            replies_future = executor.submit(get_tweet_replies, tweet_id, api_key, max_replies, max_pages)
-            quotes_future = executor.submit(get_tweet_quotes, tweet_id, api_key, max_quotes, max_pages)
-            retweeters_future = executor.submit(get_tweet_retweeters, tweet_id, api_key, max_retweeters, max_pages)
-
-            normalized["replies"] = replies_future.result()
-            normalized["quotes"] = quotes_future.result()
-            normalized["retweeters"] = retweeters_future.result()
-    else:
-        normalized["replies"] = []
-        normalized["quotes"] = []
-        normalized["retweeters"] = []
-
-    return normalized
-
-
-def search_all_tweets(
-    query: str,
-    api_key: str,
-    query_type: str = "Latest",
-    max_pages: int | None = None,
-    max_tweets: int | None = None,
-    fetch_limits: dict | None = None,
-    parallel_requests: int = 100,
-    fetch_interactions: bool = False,
-) -> list[dict]:
-    limits = fetch_limits or {}
-    max_replies = limits.get("max_replies", 250)
-    max_quotes = limits.get("max_quotes", 250)
-    max_retweeters = limits.get("max_retweeters", 250)
-    sub_max_pages = max_pages or 5
-
-    cursor = ""
-    page_count = 0
-    all_tweets = []
-
-    while True:
-        page_count += 1
-        page_info = f"/{max_pages}" if max_pages else ""
-        print(f"Fetching page {page_count}{page_info}...")
-        result = search_tweets(query, api_key, query_type, cursor)
-        tweets = result.get("tweets", [])
-        print(f"  Got {len(tweets)} tweets")
-
-        for tweet in tweets:
-            all_tweets.append(tweet)
-            if max_tweets and len(all_tweets) >= max_tweets:
-                break
-
-        if max_tweets and len(all_tweets) >= max_tweets:
-            break
-
-        if max_pages and page_count >= max_pages:
-            break
-
-        if not result.get("has_next_page"):
-            break
-
-        cursor = result.get("next_cursor", "")
-        if not cursor:
-            break
-
-    print(f"Processing {len(all_tweets)} tweets with {parallel_requests} parallel requests...")
-    results = []
-
-    with ThreadPoolExecutor(max_workers=parallel_requests) as executor:
-        futures = {
-            executor.submit(process_tweet, tweet, api_key, max_replies, max_quotes, max_retweeters, sub_max_pages, fetch_interactions): i
-            for i, tweet in enumerate(all_tweets)
-        }
-
-        for future in futures:
-            idx = futures[future]
-            try:
-                normalized = future.result()
-                results.append((idx, normalized))
-                print(f"  [{len(results)}/{len(all_tweets)}] {normalized['id']}: r={len(normalized['replies'])} q={len(normalized['quotes'])} rt={len(normalized['retweeters'])}")
-            except Exception as e:
-                print(f"  [{len(results)}/{len(all_tweets)}] Error: {e}")
-
-    results.sort(key=lambda x: x[0])
-    return [r[1] for r in results]
 
 
 def load_topics_from_raw() -> list[dict]:
@@ -271,40 +79,91 @@ def list_topics() -> list[str]:
     return [topic["slug"] for topic in topics]
 
 
-def search_topic(
-    topic_slug: str,
-    config: dict,
-    api_key: str,
-    max_pages: int | None = None,
-) -> list[dict]:
-    topic = get_topic(topic_slug)
-    if not topic:
-        available = list_topics()
-        raise ValueError(f"Topic '{topic_slug}' not found. Available: {available}")
+def search_tweets_page(query: str, api_key: str, query_type: str = "Latest", cursor: str = "") -> dict:
+    headers = {"X-API-Key": api_key}
+    params = {
+        "query": query,
+        "queryType": query_type,
+    }
+    if cursor:
+        params["cursor"] = cursor
 
+    response = requests.get(API_BASE_URL, headers=headers, params=params)
+    response.raise_for_status()
+    return response.json()
+
+
+def search_tweets(
+    topic: dict,
+    twitter_api_key: str,
+    config: dict,
+) -> list[dict]:
     query = topic["query"]
     search_config = config.get("search", {})
     query_type = search_config.get("query_type", "Top")
-    max_tweets = search_config.get("max_tweets", 100)
-    fetch_limits = config.get("fetch_limits", {})
-    fetch_interactions = search_config.get("fetch_interactions", False)
+    max_pages = search_config.get("max_pages", 20)
 
-    if max_pages is None:
-        max_pages = search_config.get("max_pages")
+    look_back = config.get("look_back", {})
+    year = look_back.get("year", 2026)
+    month = look_back.get("month", 1)
+    cutoff_date = datetime(year, month, 1)
+    print(f"Cutoff date: {cutoff_date.strftime('%Y-%m-%d')}")
 
-    parallel_requests = search_config.get("parallel_requests", 10)
-    tweets = search_all_tweets(query, api_key, query_type, max_pages, max_tweets, fetch_limits, parallel_requests, fetch_interactions)
-    return tweets
+    all_tweets = []
+    seen_ids = set()
+    cursor = ""
+    page_count = 0
+
+    while page_count < max_pages:
+        page_count += 1
+        print(f"Fetching page {page_count}/{max_pages}...")
+
+        try:
+            result = search_tweets_page(query, twitter_api_key, query_type, cursor)
+        except Exception as e:
+            print(f"Error fetching page: {e}")
+            break
+
+        raw_tweets = result.get("tweets", [])
+        print(f"  Got {len(raw_tweets)} tweets")
+
+        if not raw_tweets:
+            break
+
+        reached_cutoff = False
+        for tweet in raw_tweets:
+            normalized = normalize_tweet(tweet)
+            if normalized["id"] not in seen_ids:
+                seen_ids.add(normalized["id"])
+                try:
+                    tweet_date = datetime.strptime(normalized["createdAt"], "%a %b %d %H:%M:%S %z %Y")
+                    if tweet_date.replace(tzinfo=None) < cutoff_date:
+                        print(f"  Reached cutoff date, stopping search")
+                        reached_cutoff = True
+                        break
+                except (ValueError, TypeError):
+                    pass
+                all_tweets.append(normalized)
+
+        if reached_cutoff:
+            break
+
+        if not result.get("has_next_page"):
+            break
+
+        cursor = result.get("next_cursor", "")
+        if not cursor:
+            break
+
+    return all_tweets
 
 
 def main():
     import argparse
-    import json
 
-    parser = argparse.ArgumentParser(description="Search tweets using TwitterAPI.io")
+    parser = argparse.ArgumentParser(description="Search tweets")
     parser.add_argument("topic", nargs="?", help="Topic slug from raw/*_topics.json")
     parser.add_argument("--config", default="config.toml", help="Path to config file")
-    parser.add_argument("--max-pages", type=int, help="Maximum number of pages to fetch")
     parser.add_argument("--list", action="store_true", help="List available topics")
     args = parser.parse_args()
 
@@ -319,23 +178,38 @@ def main():
     if not args.topic:
         parser.error("topic is required (use --list to see available topics)")
 
-    api_key = os.environ.get("TWITTER_API_KEY")
-    if not api_key:
+    twitter_api_key = os.environ.get("TWITTER_API_KEY")
+    if not twitter_api_key:
         print("Error: TWITTER_API_KEY environment variable not set")
         return 1
 
-    tweets = search_topic(args.topic, config, api_key, args.max_pages)
+    topic = get_topic(args.topic)
+    if not topic:
+        available = list_topics()
+        print(f"Topic '{args.topic}' not found. Available: {available}")
+        return 1
+
+    start_time = datetime.now()
+    print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Topic: {args.topic}")
+    print(f"Description: {topic.get('description')}")
+
+    tweets = search_tweets(topic, twitter_api_key, config)
 
     raw_dir = Path("raw")
     raw_dir.mkdir(exist_ok=True)
-    output_path = raw_dir / f"{args.topic}.json"
 
-    with open(output_path, "w") as f:
+    tweets_path = raw_dir / f"{args.topic}.json"
+    with open(tweets_path, "w") as f:
         json.dump(tweets, f, indent=2)
-    print(f"Saved {len(tweets)} tweets to {output_path}")
+    print(f"Saved {len(tweets)} tweets to {tweets_path}")
+
+    elapsed = datetime.now() - start_time
+    print(f"Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Total elapsed: {elapsed}")
 
     return 0
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

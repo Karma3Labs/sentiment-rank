@@ -2,11 +2,12 @@ import os
 import sys
 import json
 import glob
+import tomllib
 import requests
 import time
-import math
 from pathlib import Path
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,86 +36,153 @@ def get_topic_by_slug(topic_slug: str) -> dict | None:
     return None
 
 
-def get_embeddings(texts: list[str], api_key: str, max_retries: int = 3) -> list[list[float]]:
+def build_prompt(topic: dict, post_text: str) -> str:
+    markets_str = ", ".join([m.get("name", "") for m in topic.get("markets", [])])
+    return f"""You are evaluating if a social media post is relevant to a prediction market event.
+
+Event: {topic.get("description", "")}
+Available markets: {markets_str}
+
+Post text:
+{post_text[:4000]}
+
+Based on the event and available markets, rate how relevant this post is to the topic.
+Return ONLY a number between 0.0 and 1.0 where:
+- 0.0 = completely irrelevant
+- 1.0 = highly relevant (directly discusses the event or makes predictions about it)
+
+Return only the number, nothing else."""
+
+
+def get_openai_relevancy(post_text: str, topic: dict, api_key: str, max_retries: int = 3) -> float | None:
+    prompt = build_prompt(topic, post_text)
     retries = 0
     while retries < max_retries:
         try:
             response = requests.post(
-                "https://api.openai.com/v1/embeddings",
+                "https://api.openai.com/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "text-embedding-3-large",
-                    "input": texts
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 10,
+                    "temperature": 0
                 },
-                timeout=60
+                timeout=30
             )
             response.raise_for_status()
             result = response.json()
-            embeddings = [None] * len(texts)
-            for item in result["data"]:
-                embeddings[item["index"]] = item["embedding"]
-            return embeddings
+            score_str = result["choices"][0]["message"]["content"].strip()
+            return max(0.0, min(1.0, float(score_str)))
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
-                print(f"Rate limited, waiting 60s...")
+                print(f"OpenAI rate limited, waiting 60s...")
                 time.sleep(60)
                 continue
-            print(f"Error getting embeddings: {e}, retrying...")
             retries += 1
-        except Exception as e:
-            print(f"Error getting embeddings: {e}, retrying...")
+        except (ValueError, KeyError):
             retries += 1
-    return []
+        except Exception:
+            retries += 1
+    return None
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot_product = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot_product / (norm_a * norm_b)
+def get_claude_relevancy(post_text: str, topic: dict, api_key: str, max_retries: int = 3) -> float | None:
+    prompt = build_prompt(topic, post_text)
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": prompt}]
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+            result = response.json()
+            score_str = result["content"][0]["text"].strip()
+            return max(0.0, min(1.0, float(score_str)))
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                print(f"Claude rate limited, waiting 60s...")
+                time.sleep(60)
+                continue
+            retries += 1
+        except (ValueError, KeyError):
+            retries += 1
+        except Exception:
+            retries += 1
+    return None
 
 
-def score_relevancy_batch(posts: list[dict], topic: dict, api_key: str, batch_size: int = 2000) -> list[dict]:
-    topic_text = f"{topic.get('description', '')} {topic.get('slug', '')}"
-    post_texts = [post.get("text", "")[:8000] for post in posts]
+def score_single_post(post: dict, topic: dict, openai_key: str, anthropic_key: str) -> dict:
+    post_text = post.get("text", "")
 
-    all_texts = [topic_text] + post_texts
+    openai_score = get_openai_relevancy(post_text, topic, openai_key)
+    claude_score = get_claude_relevancy(post_text, topic, anthropic_key)
 
-    all_embeddings = []
-    for i in range(0, len(all_texts), batch_size):
-        batch = all_texts[i:i + batch_size]
-        print(f"  Getting embeddings for batch {i // batch_size + 1}/{math.ceil(len(all_texts) / batch_size)}...")
-        embeddings = get_embeddings(batch, api_key)
-        if not embeddings:
-            print(f"  Failed to get embeddings for batch, using zeros")
-            embeddings = [[0.0] * 3072] * len(batch)
-        all_embeddings.extend(embeddings)
+    scores = [s for s in [openai_score, claude_score] if s is not None]
+    if scores:
+        avg_score = sum(scores) / len(scores)
+    else:
+        avg_score = 0.0
 
-    topic_embedding = all_embeddings[0]
-    post_embeddings = all_embeddings[1:]
+    return {
+        "post_id": post.get("id"),
+        "relevancy_score": avg_score,
+        "openai_score": openai_score,
+        "claude_score": claude_score
+    }
 
+
+def score_relevancy(posts: list[dict], topic: dict, openai_key: str, anthropic_key: str, parallel_requests: int) -> list[dict]:
     results = []
-    for i, post in enumerate(posts):
-        similarity = cosine_similarity(topic_embedding, post_embeddings[i])
-        score = max(0.0, min(1.0, similarity))
-        results.append({
-            "post_id": post.get("id"),
-            "relevancy_score": score
-        })
-        print(f"[{i + 1}/{len(posts)}] Post {post.get('id')}: {score:.2f}")
+    total = len(posts)
+
+    with ThreadPoolExecutor(max_workers=parallel_requests) as executor:
+        futures = {
+            executor.submit(score_single_post, post, topic, openai_key, anthropic_key): post
+            for post in posts
+        }
+
+        for future in as_completed(futures):
+            post = futures[future]
+            try:
+                result = future.result()
+                results.append(result)
+                print(f"[{len(results)}/{total}] Post {result['post_id']}: openai={result['openai_score']}, claude={result['claude_score']}, avg={result['relevancy_score']:.2f}")
+            except Exception as e:
+                print(f"Error processing post {post.get('id')}: {e}")
 
     return results
 
 
+def load_config(config_path: str = "config.toml") -> dict:
+    with open(config_path, "rb") as f:
+        return tomllib.load(f)
+
+
 def main():
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    anthropic_key = os.environ.get("CLAUDE_API_KEY")
+    if not openai_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
+    if not anthropic_key:
+        raise ValueError("CLAUDE_API_KEY environment variable not set")
+
+    config = load_config()
+    parallel_requests = config.get("search", {}).get("parallel_requests", 10)
 
     if len(sys.argv) < 2:
         print("Usage: python predict_relevancy.py <topic_slug>")
@@ -149,9 +217,11 @@ def main():
     print(f"Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Topic: {topic_slug}")
     print(f"Description: {topic.get('description')}")
+    print(f"Markets: {[m.get('name') for m in topic.get('markets', [])]}")
     print(f"Total posts: {total}")
+    print(f"Parallel requests: {parallel_requests}")
 
-    results = score_relevancy_batch(posts, topic, api_key)
+    results = score_relevancy(posts, topic, openai_key, anthropic_key, parallel_requests)
     results.sort(key=lambda x: x.get("relevancy_score", 0), reverse=True)
 
     output_path = raw_dir / f"{topic_slug}_relevancy.json"
